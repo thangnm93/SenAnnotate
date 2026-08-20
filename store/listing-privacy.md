@@ -46,7 +46,11 @@ on the user's device until the user copies the report or saves a screenshot.
 Two local stores, both via chrome.storage. (1) chrome.storage.local holds the user's
 annotations — the note text plus a description of the annotated element, its DOM ancestry and
 a re-resolvable CSS selector — keyed by the page's origin and path, so that reloading the page
-under review brings the notes back instead of silently losing the user's work. (2)
+under review brings the notes back instead of silently losing the user's work. A note may also
+carry images: the optional screenshot of the annotated element, and up to three reference
+images the user pastes or attaches to show what the element should look like instead. Both are
+downscaled and stored as data URIs beside the note, and a size ceiling sheds them rather than
+let a write fail and lose the notes themselves. (2)
 chrome.storage.sync holds preferences only: report detail level, theme, whether diagnostics
 capture is enabled, and whether the toolbar is collapsed, so they follow the user's Chrome
 profile between machines. Annotation content is never written to sync storage. Nothing in
@@ -73,7 +77,14 @@ button. The primary path is navigator.clipboard.writeText, but a page can disabl
 Permissions-Policy: clipboard-write=(), and it also rejects when the document is not focused.
 In those cases the extension falls back to document.execCommand("copy") on a textarea inside
 its own shadow root, which is what requires clipboardWrite. It is used only in response to the
-user pressing Copy, only to write, and the extension never reads the clipboard.
+user pressing Copy, and only to write.
+
+The extension never reads the clipboard programmatically: it does not call
+navigator.clipboard.readText or read(), and it declares no clipboardRead permission. The one
+place clipboard content reaches it is a paste the user performs into an open annotation, where
+the paste event's own image data becomes a reference image attached to that note. The
+accompanying text, if any, is left to the browser to insert into the note's textarea and is
+never inspected.
 ```
 
 ### Host permission (`<all_urls>`)
@@ -110,7 +121,7 @@ extension has no runtime dependencies at all.
 
 | Category | Check? | Why |
 |---|---|---|
-| Personally identifiable information | ☐ no | Never sought. Any personal text that appears does so as the content of an element the user chose, which is disclosed under Website content. |
+| Personally identifiable information | ☐ no | Never sought. Any personal text that appears does so as the content of an element the user chose, which is disclosed under Website content. A pasted reference image is user-authored input like the note text — supplied deliberately, stored locally, never transmitted — and is not collection. |
 | Health information | ☐ no | Not touched. |
 | Financial and payment information | ☐ no | Not touched. |
 | Authentication information | ☐ no | Actively avoided: field values are never recorded and credential-like query params are replaced with `[redacted]`. |

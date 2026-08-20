@@ -782,6 +782,108 @@ async function main() {
     await pick.keyboard.press("Escape");
 
     // -------------------------------------------------------------------------
+    // Reference images — the picture of what it should look like instead
+    // -------------------------------------------------------------------------
+    //
+    // Two ways in, both covered: the file picker, driven with Playwright's real
+    // `setInputFiles`, and a paste, which has to be synthesised — there is no way to put
+    // an image on the OS clipboard from here. The synthetic event works because the
+    // composer registers its handler through `listen()`, which calls `addEventListener`
+    // directly and never passes through `guarded()` — so `dom.ts`'s untrusted-event drop
+    // does not apply to it, whatever `ACTIVATION_EVENTS` contains.
+    // `docs/reference-images/context.md` weighs that exposure.
+    //
+    // `composed: true` on the dispatch is load-bearing, not decoration: it is what a real
+    // `paste` carries, and without it the event could not leave the shadow root at all,
+    // which would make the containment check below pass for the wrong reason.
+    const reference = await context.newPage();
+    await reference.goto(`${base}/reference.html`);
+    await reference.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
+    await reference.locator(".tool--brand").click();
+    await reference.locator(".cta").click({ timeout: 5_000 });
+    await reference.locator(".composer").waitFor({ state: "visible", timeout: 5_000 });
+
+    // A 2×2 PNG. Small enough to be an obvious fixture, real enough to decode.
+    const pngBase64 =
+      "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFUlEQVR4nGP8z4AATAxIHDgLIgYIAAD+9wH1i0S+cwAAAABJRU5ErkJggg==";
+    const pngPath = join(profile, "reference.png");
+    await writeFile(pngPath, Buffer.from(pngBase64, "base64"));
+
+    await reference.locator(".composer__file").setInputFiles(pngPath);
+    await reference.waitForTimeout(500);
+    check(
+      "an attached image appears in the composer",
+      (await reference.locator(".composer__thumb").count()) === 1,
+      `${await reference.locator(".composer__thumb").count()} thumbnails`,
+    );
+
+    await reference.evaluate((base64) => {
+      const root = document.querySelector("[data-senannotate-ui]").shadowRoot;
+      const composer = root.querySelector(".composer");
+      const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([bytes], "pasted.png", { type: "image/png" }));
+      composer.dispatchEvent(
+        new ClipboardEvent("paste", {
+          clipboardData: transfer,
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    }, pngBase64);
+    await reference.waitForTimeout(500);
+    check(
+      "a pasted image joins the attached one",
+      (await reference.locator(".composer__thumb").count()) === 2,
+      `${await reference.locator(".composer__thumb").count()} thumbnails after the paste`,
+    );
+    check(
+      "the pasted reference image never reaches the page",
+      (await reference.evaluate(() => window.__pastedIntoPage)) === false,
+      "the page's document paste listener saw our clipboard",
+    );
+
+    await reference.locator(".composer__image-remove").first().click();
+    await reference.waitForTimeout(200);
+    check(
+      "an image can be taken back out",
+      (await reference.locator(".composer__thumb").count()) === 1,
+      `${await reference.locator(".composer__thumb").count()} thumbnails after removing one`,
+    );
+
+    await reference.locator(".composer__input").click();
+    await reference.keyboard.type("Make this match the approved design.");
+    await reference.locator(".composer .button--primary").click();
+    await reference.locator(".composer").waitFor({ state: "detached", timeout: 5_000 });
+
+    await reference.locator('.tool[aria-label^="Annotations"]').click();
+    await reference.locator(".panel").waitFor({ state: "visible", timeout: 5_000 });
+    await reference.locator(".panel .button--primary").click();
+    const referenceReport = await reference.evaluate(() => navigator.clipboard.readText());
+
+    check(
+      "the report says the reference is a target, not the current state",
+      /\*\*Reference — how it should look, not how it looks now \(1\):\*\*/.test(referenceReport),
+      referenceReport.split("\n").find((line) => line.includes("Reference")) ?? "(no reference line)",
+    );
+    check(
+      "the reference image itself travels in the report",
+      /!\[[^\]]*reference 1\]\(data:image\/jpeg/.test(referenceReport),
+      "no embedded reference image in the report",
+    );
+
+    // Editing must not lose them — the composer is rebuilt from the stored note.
+    await reference.locator(".entry").first().click();
+    await reference.locator(".composer").waitFor({ state: "visible", timeout: 5_000 });
+    check(
+      "reopening a note brings its reference images back",
+      (await reference.locator(".composer__thumb").count()) === 1,
+      `${await reference.locator(".composer__thumb").count()} thumbnails on reopen`,
+    );
+    await reference.keyboard.press("Escape");
+    await reference.close();
+
+    // -------------------------------------------------------------------------
     // Modals — our own UI must not read as a click outside the page's dialog
     // -------------------------------------------------------------------------
     //

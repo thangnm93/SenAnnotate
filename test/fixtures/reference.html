@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Reference image fixture</title>
+    <style>
+      body { margin: 0; font: 14px/1.4 system-ui, sans-serif; padding: 20px; }
+      .cta { padding: 8px 14px; background: #dbeafe; border: 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Reference image fixture</h1>
+    <!-- Its own page: the report assertions below read whatever this page holds, and a
+         fixture another block annotates would carry that block's notes too. -->
+    <button class="cta">Upgrade plan</button>
+    <script>
+      // Stands in for every rich-text editor, chat box and drag-drop uploader on the web:
+      // they all listen for `paste` on the document. A reference image pasted into our
+      // composer must never reach this handler — the picture is confidential and this
+      // page would upload it into itself.
+      window.__pastedIntoPage = false;
+      document.addEventListener("paste", () => {
+        window.__pastedIntoPage = true;
+      });
+    </script>
+  </body>
+</html>

@@ -213,6 +213,17 @@ button that also cleared was designed and then cut, and the argument is recorded
 rather than lost. Its `changelog.md` records the copy shortcut this feature originally
 carried, and the 0.6.0 binding it collided with.
 
+## [`reference-images/`](./reference-images/) — unreleased
+
+Every image the extension held was a photograph of the *current* state. This adds the
+other kind: paste or attach what the element should look like **instead**. Its
+`context.md` is the one to read before touching image storage — it explains why this is a
+separate field rather than a `kind` on one list, why references outlive screenshots under
+quota pressure (a screenshot can be retaken; a pasted Figma frame cannot), and why the
+untrusted-paste path is open *by construction* rather than by choice: `ACTIVATION_EVENTS`
+cannot reach a handler registered through `listen()`. Read the disclosure half of that
+section before assuming an open shadow root is free.
+
 ## [`composer-retarget/`](./composer-retarget/) — unreleased
 
 Clicking picks whatever is under the pointer, which is routinely one level off what you

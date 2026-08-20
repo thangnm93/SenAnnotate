@@ -294,6 +294,19 @@ export interface Annotation {
    * otherwise exceed what `chrome.storage.local` will hold — see `saveAnnotations`.
    */
   screenshotData?: string;
+  /**
+   * Images the *user* supplied — pasted or attached — as `data:` URIs.
+   *
+   * Deliberately a separate field from `screenshotData` rather than a list the two
+   * share. They answer opposite questions: a screenshot is what the element looks
+   * like **now**, a reference is what it should look like **instead**. An agent given
+   * both under one heading has to guess which is the target, and guessing wrong means
+   * implementing the bug. The report labels them, and so does storage.
+   *
+   * Also why they outlive screenshots under quota pressure: a screenshot can be taken
+   * again from the page, a pasted Figma frame cannot.
+   */
+  referenceImages?: string[];
 }
 
 // -----------------------------------------------------------------------------

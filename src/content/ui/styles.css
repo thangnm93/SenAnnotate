@@ -682,6 +682,52 @@ button {
   color: var(--sa-fg-muted);
 }
 
+/*
+ * Reference images. The strip is empty and takes no height until something is
+ * attached, so a composer with no images is exactly the card it was before.
+ */
+.composer__images:not(:empty) {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.composer__image {
+  position: relative;
+  width: 72px;
+  height: 54px;
+}
+
+.composer__thumb {
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--sa-border);
+  border-radius: var(--sa-radius-sm);
+  /* `cover`, so three pictures of different shapes still read as one row. */
+  object-fit: cover;
+  background: var(--sa-bg-sunken);
+}
+
+.composer__image-remove {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1.5px solid var(--sa-bg-solid);
+  background: var(--sa-fg);
+  color: var(--sa-bg-solid);
+}
+
+/* The picker is opened by the toolbar button; the input itself is never seen. */
+.composer__file {
+  display: none;
+}
+
 .button {
   display: inline-flex;
   align-items: center;

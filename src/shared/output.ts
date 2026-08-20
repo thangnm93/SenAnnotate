@@ -229,8 +229,58 @@ function renderAnnotation(
   }
 
   lines.push(...renderScreenshot(annotation));
+  lines.push(...renderReferences(annotation));
   lines.push(`**Feedback:** ${annotation.comment}`, "");
   return lines;
+}
+
+/**
+ * The images the user supplied, under a heading that says what they are *for*.
+ *
+ * "Reference" and the sentence after it are the whole feature. A screenshot and a
+ * target rendered under one heading leave the reader to guess which is which, and the
+ * cost of guessing wrong is an agent implementing the current state on purpose.
+ *
+ * The nudge about design tokens is deliberate too: an agent handed a picture will
+ * otherwise reach for literal hex values, where the repo it is editing has a variable
+ * for that colour.
+ */
+function renderReferences(annotation: Annotation): string[] {
+  const images = annotation.referenceImages ?? [];
+  if (!images.length) return [];
+
+  const alt = annotation.element.replace(/[[\]]/g, "");
+  const lines = [
+    `**Reference — how it should look, not how it looks now (${images.length}):**`,
+    "",
+  ];
+  images.forEach((uri, index) => {
+    lines.push(`![${alt} — reference ${index + 1}](${uri})`, "");
+  });
+  lines.push("_Match this using the project's own tokens or utility classes, not the literal values._", "");
+  return lines;
+}
+
+/**
+ * How many user-supplied images a set of notes carries, for the levels that cannot show
+ * them.
+ *
+ * Compact renders one line per note and drops every attachment — that is the deal it
+ * offers. But a reference image is the one attachment nobody can produce again: a
+ * screenshot can be retaken by standing on the page, while the frame that was on the
+ * clipboard an hour ago exists nowhere this extension can reach. Copying a Compact
+ * report and finding no trace of the picture you pasted is the same failure this file
+ * already refuses for captured console errors, so Compact says what it is holding back.
+ */
+function referenceCount(annotations: Annotation[]): number {
+  return annotations.reduce(
+    (sum, annotation) => sum + (annotation.referenceImages?.length ?? 0),
+    0,
+  );
+}
+
+function referencePhrase(count: number): string {
+  return `${count} reference image${count === 1 ? "" : "s"}`;
 }
 
 /**
@@ -363,7 +413,15 @@ export function generateSessionOutput(
 
     if (detailLevel === "compact") {
       open.forEach((annotation, index) => lines.push(renderCompact(annotation, index + 1)));
-      if (done.length) lines.push("", `_${done.length} already fixed._`);
+
+      // Same contract as the single-page compact report: name what this level drops.
+      const withheld: string[] = [];
+      if (done.length) withheld.push(`${done.length} already fixed`);
+      const references = referenceCount(entry.annotations);
+      if (references) withheld.push(referencePhrase(references));
+      if (withheld.length) {
+        lines.push("", `_Also here: ${withheld.join(", ")} — switch off Compact to include them._`);
+      }
       lines.push("");
       continue;
     }
@@ -406,6 +464,10 @@ export function generateOutput(
     const withheld: string[] = [];
     if (logCount) withheld.push(`${logCount} console error${logCount === 1 ? "" : "s"}`);
     if (requestCount) withheld.push(`${requestCount} failed request${requestCount === 1 ? "" : "s"}`);
+    // Across every note, not just the open ones: the list is about what the file does not
+    // contain, and a fixed note's reference image is just as absent.
+    const references = referenceCount(annotations);
+    if (references) withheld.push(referencePhrase(references));
     if (done.length) withheld.unshift(`${done.length} already fixed`);
     if (withheld.length) {
       lines.push("", `_Also captured: ${withheld.join(", ")} — switch off Compact to include them._`);

@@ -53,6 +53,7 @@ import {
   downloadBlob,
   downloadPath,
   encodeForEmbed,
+  encodeSuppliedImage,
 } from "./screenshot";
 import { resolveSource } from "./source";
 import {
@@ -66,6 +67,7 @@ import {
 } from "./storage";
 import {
   Composer,
+  MAX_REFERENCE_IMAGES,
   type ComposerCallbacks,
   type ComposerMeta,
   type RetargetDirection,
@@ -664,14 +666,25 @@ function openComposer(draft: Draft, anchor: DOMRect, existing: Annotation | null
   retargetFrom = composerTargets[0] ?? null;
 
   const callbacks: ComposerCallbacks = {
-    onSubmit: (comment, kind: AnnotationKind) => {
+    onSubmit: (comment, kind: AnnotationKind, referenceImages: string[]) => {
+      // Undefined rather than an empty array: it keeps the stored shape identical to
+      // what every annotation written before this feature looks like.
+      const images = referenceImages.length ? referenceImages : undefined;
       if (existing) {
         existing.comment = comment;
         existing.kind = kind;
+        existing.referenceImages = images;
       } else {
         annotations = [
           ...annotations,
-          { ...(composerDraft ?? draft), id: newId(), comment, kind, timestamp: Date.now() } as Annotation,
+          {
+            ...(composerDraft ?? draft),
+            id: newId(),
+            comment,
+            kind,
+            referenceImages: images,
+            timestamp: Date.now(),
+          } as Annotation,
         ];
       }
       closeComposer();
@@ -681,6 +694,7 @@ function openComposer(draft: Draft, anchor: DOMRect, existing: Annotation | null
     },
     onCancel: () => closeComposer(),
     onScreenshot: () => void captureScreenshot(existing ?? composerDraft ?? draft),
+    onAttach: (files) => void attachReferenceImages(files),
     onDelete: existing
       ? () => {
           annotations = annotations.filter((item) => item.id !== existing.id);
@@ -695,7 +709,21 @@ function openComposer(draft: Draft, anchor: DOMRect, existing: Annotation | null
       : undefined,
   };
 
-  composer = new Composer(ui.cardLayer, anchor, { ...composerMeta(draft), initialComment: existing?.comment, initialKind: existing?.kind }, callbacks);
+  composer = new Composer(
+    ui.cardLayer,
+    anchor,
+    {
+      ...composerMeta(draft),
+      initialComment: existing?.comment,
+      initialKind: existing?.kind,
+      // Only an existing note has any. A fresh `Draft` carries the field structurally —
+      // `Omit<Annotation, …>` keeps it — but `captureDraft` never writes it, and
+      // `openEditor` passes the same object as both `draft` and `existing`, so a
+      // fallback to `draft` would read either `undefined` or what was just read.
+      initialImages: existing?.referenceImages,
+    },
+    callbacks,
+  );
 }
 
 /**
@@ -866,6 +894,64 @@ function retargetable(draft: Draft, existing: Annotation | null): boolean {
 
   const target = composerTargets[0];
   return composerTargets.length === 1 && !!target && target.ownerDocument === document;
+}
+
+/**
+ * Encode pasted or picked images and hand them to the open composer.
+ *
+ * The composer collects them rather than the annotation: nothing is written until the
+ * note is saved, so a paste into a composer you then cancel leaves no trace — the same
+ * contract the typed comment already has.
+ */
+async function attachReferenceImages(files: File[]): Promise<void> {
+  if (!composer || !files.length) return;
+
+  const room = composer.referenceImageRoom();
+  if (!room) {
+    ui.toast(`${MAX_REFERENCE_IMAGES} reference images is the limit`, "error");
+    return;
+  }
+
+  // Sliced before the encode, not after it. The picker is `multiple`, so "select all" in
+  // a screenshots folder hands this sixty files and a synthesised paste could hand it a
+  // hundred — and every one of them would otherwise pay for a canvas and a JPEG encode,
+  // concurrently, only to be discarded by the cap a moment later.
+  const attempted = files.slice(0, room);
+  const encoded = (
+    await Promise.all(attempted.map((file) => encodeSuppliedImage(file)))
+  ).filter((uri): uri is string => uri !== null);
+
+  if (!encoded.length) {
+    ui.toast("Could not read that image", "error");
+    return;
+  }
+
+  // Checked again rather than optional-chained: encoding is async and Esc during a 4 MB
+  // PNG is not rare. `?? 0` collapsed "the composer is gone" into the same 0 the cap
+  // produces, and told the user about a limit they were nowhere near.
+  if (!composer) return;
+  const kept = composer.addReferenceImages(encoded);
+  composer.focus();
+
+  // Room is re-read inside `addReferenceImages`, so a second paste that landed during
+  // this one's encode can still take the last slot.
+  if (!kept) {
+    ui.toast(`${MAX_REFERENCE_IMAGES} reference images is the limit`, "error");
+    return;
+  }
+
+  // Counted against what the user handed over, not against what survived. Five files
+  // with three slots, or three files where one is a corrupt PNG, both used to report
+  // only the successes — leaving the rest to vanish with no word about why.
+  const lost = files.length - kept;
+  if (lost > 0) {
+    ui.toast(
+      `Attached ${kept} image${kept === 1 ? "" : "s"} — ${lost} could not be added`,
+      "error",
+    );
+    return;
+  }
+  ui.toast(`Attached ${kept} image${kept === 1 ? "" : "s"}`);
 }
 
 function closeComposer(): void {

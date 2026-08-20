@@ -72,6 +72,17 @@ function fitToQuota(annotations: Annotation[]): { payload: Annotation[]; dropped
     dropped += 1;
   }
 
+  // Reference images go last, and only once every screenshot is already gone. A
+  // screenshot can be taken again by standing on the page; an image pasted from
+  // somewhere else cannot be recovered from anything this extension holds.
+  for (const annotation of payload) {
+    if (total <= MAX_STORED_BYTES) break;
+    if (!annotation.referenceImages?.length) continue;
+    total -= annotation.referenceImages.reduce((sum, uri) => sum + uri.length, 0);
+    dropped += annotation.referenceImages.length;
+    delete annotation.referenceImages;
+  }
+
   return { payload, dropped };
 }
 

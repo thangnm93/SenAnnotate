@@ -147,7 +147,16 @@ round-trip, and works identically with no framework at all. Keep it that way.
   `mousedown` (text fields exempted) so a click takes no focus. Without these a toolbar click
   reads as an "outside click" and dismisses the page's modal, or trips its focus trap into
   stealing the composer's keystrokes (`docs/modal-click-leak/`, `docs/modal-focus-leak/`).
-  Keyboard events and `pointermove` are deliberately excluded.
+  Keyboard events and `pointermove` are deliberately excluded. `paste` is stopped too, but in
+  the composer rather than at the host, because only the composer has a paste handler — so the
+  host's list is not the whole story, and a reader counting it will miss one.
+- **An event our UI handles must be *stopped* before it reaches `document`, and
+  `preventDefault` is not that.** Cancelling the default action still lets the page's own
+  listener run and see a paste, a click or a focus change that was never the page's business.
+  This is the shape behind `docs/modal-click-leak/`, `docs/modal-focus-leak/` and the
+  reference-image paste — three occurrences, so assume the next new input surface in the
+  overlay has it too until a test says otherwise. `stopPropagation` first and unconditionally;
+  decide about `preventDefault` afterwards.
 - **`waitForFunction` cannot observe a frozen page.** Freeze parks `requestAnimationFrame`
   *and* `setTimeout`, so any in-page polling loop — including Playwright's, whichever
   `polling` you pass — is held by the state it is waiting for. Use a Node-side

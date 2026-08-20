@@ -109,6 +109,14 @@ export async function clearAllPages(): Promise<number> {
  * offers `text` and deliberately no `html`). It is a *correctness* guard: an entry
  * without a `selector` throws inside `resolveElement`, and one without an `id`
  * collides with everything in the marker map.
+ *
+ * `referenceImages` earns its line for the same reason, and it is the only optional
+ * field that does: three separate places iterate it. A hand-edited export carrying
+ * `"referenceImages": "x"` passes the length check in `fitToQuota` and throws on
+ * `.reduce`, inside `saveAnnotations`' `try` — so every note on that page silently stops
+ * persisting. `output.ts` throws on `.forEach` and takes Copy report down with it, and
+ * the composer renders one thumbnail per character. A string is the shape that gets
+ * through; anything without a length just skips.
  */
 function looksLikeAnnotation(value: unknown): value is Annotation {
   if (typeof value !== "object" || value === null) return false;
@@ -117,7 +125,10 @@ function looksLikeAnnotation(value: unknown): value is Annotation {
     typeof candidate.id === "string" &&
     typeof candidate.comment === "string" &&
     typeof candidate.element === "string" &&
-    typeof candidate.selector === "string"
+    typeof candidate.selector === "string" &&
+    (candidate.referenceImages === undefined ||
+      (Array.isArray(candidate.referenceImages) &&
+        candidate.referenceImages.every((uri) => typeof uri === "string")))
   );
 }
 
