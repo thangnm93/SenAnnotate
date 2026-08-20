@@ -294,6 +294,25 @@ export interface Annotation {
    * otherwise exceed what `chrome.storage.local` will hold — see `saveAnnotations`.
    */
   screenshotData?: string;
+  /**
+   * Property-level edits the reviewer tried on the element before writing the note.
+   *
+   * `from` is the *computed* value — what the element actually rendered as — because
+   * that is the state the agent is changing away from; the inline style is empty on
+   * any element that takes its styling from a stylesheet. The page itself is left
+   * exactly as it was found: the preview is inline style, reverted when the composer
+   * closes (`docs/design-edits/context.md`).
+   */
+  designChanges?: DesignChange[];
+  /** A replacement for the element's text, when the reviewer rewrote it. */
+  textChange?: { from: string; to: string };
+}
+
+export interface DesignChange {
+  /** CSS property in kebab-case, e.g. `background-color`. */
+  property: string;
+  from: string;
+  to: string;
 }
 
 // -----------------------------------------------------------------------------

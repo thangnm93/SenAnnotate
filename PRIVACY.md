@@ -1,6 +1,6 @@
 # Privacy policy — SenAnnotate
 
-Last updated: 11 August 2026. Applies to the SenAnnotate Chrome extension.
+Last updated: 18 August 2026. Applies to the SenAnnotate Chrome extension.
 
 ## The short version
 
@@ -30,6 +30,9 @@ the page you are reviewing brings your notes back:
   text, CSS class names, computed styles, accessibility attributes, the full DOM path, and —
   on pages built with Vue, React, Svelte or Angular — the component names and source file
   the framework itself reports.
+- If you used the Design section to try a change on the element: the CSS properties you
+  adjusted, with the value the element already had and the value you chose — `font-size:
+  16px → 22px` — and, if you rewrote the element's text, that text and what it replaced.
 - The filename of any screenshot you chose to save.
 
 Because this describes real page content, it can incidentally include text that is personal
@@ -66,6 +69,20 @@ Two guarantees here are deliberate, and both have automated tests:
    credentials (`token`, `secret`, `password`, `signature`, `api_key`, `auth`, `session`,
    `jwt`, and similar) are replaced with `[redacted]` before storage.
 
+### Design previews are temporary, and never saved to the page
+
+The Design section inside the annotation card lets you try a change — a colour, a size, some
+padding, or a rewritten label — on the real element while you decide what to ask for. While
+that card is open, the change is applied to the element as an inline style (or, for text, to
+the text itself) so that you can see it.
+
+**It is always undone when the card closes** — when you save, cancel, press Escape, or open a
+different note. The `style` attribute is put back exactly as the page had it, and removed
+entirely when the page had none. Nothing is written to the page, no stylesheet or script is
+injected, and reloading is not needed to get the page back: the extension has already handed
+it back. What is kept is the *description* of the change, in the annotation, as listed above —
+so that whoever reads the note knows what you tried.
+
 ### Screenshots
 
 If you click the camera button on an annotation, the extension photographs the visible area
@@ -79,8 +96,11 @@ without that click.
 - It does not use your data for anything unrelated to producing the report you asked for.
 - It does not use your data to assess creditworthiness or for lending purposes.
 - It does not read your clipboard. It only writes to it, when you press Copy.
-- It does not modify, block or inject anything into the pages you visit beyond its own
-  floating toolbar, which lives in a shadow root and is removed when you disable it.
+- It does not inject scripts or stylesheets into the pages you visit, block anything on
+  them, or leave any change behind. Its own interface lives in a shadow root and is removed
+  when you disable it. The one thing it does put on a page — the temporary design preview
+  described above — is applied only while you have that annotation card open and is undone
+  when it closes.
 - It does not collect health, financial, payment, authentication or location data, and it
   does not read your personal communications.
 

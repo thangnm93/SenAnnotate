@@ -782,6 +782,168 @@ async function main() {
     await pick.keyboard.press("Escape");
 
     // -------------------------------------------------------------------------
+    // Design edits — preview on the page, report the delta, leave nothing behind
+    // -------------------------------------------------------------------------
+    //
+    // The last of those is the one worth guarding: the extension's contract with the
+    // page is that it does not modify it, and a preview is a loan. Two checks below
+    // exist only to catch a revert that stops working.
+    const design = await context.newPage();
+    await design.goto(`${base}/design.html`);
+    await design.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
+    await design.locator(".tool--brand").click();
+    await design.locator(".cta").click({ timeout: 5_000 });
+    await design.locator(".composer").waitFor({ state: "visible", timeout: 5_000 });
+
+    check(
+      "the design section is collapsed until it is asked for",
+      (await design.locator(".design__body").isVisible()) === false,
+      "the design controls were open on a fresh composer",
+    );
+
+    await design.locator(".design__toggle").click();
+    await design.locator('.design__control[data-design="font-size"]').fill("22px");
+    await design.waitForTimeout(250);
+
+    check(
+      "a typed value shows on the real element straight away",
+      (await design.locator(".cta").evaluate((el) => getComputedStyle(el).fontSize)) === "22px",
+      `the button rendered at ${await design.locator(".cta").evaluate((el) => getComputedStyle(el).fontSize)}`,
+    );
+
+    await design.locator('.design__control[data-design="padding"]').fill("20px");
+    await design.locator('.design__control[data-design="text"]').fill("Upgrade now");
+    await design.waitForTimeout(250);
+
+    check(
+      "rewriting the text replaces it on the page",
+      (await design.locator(".cta").textContent()) === "Upgrade now",
+      `the button reads "${await design.locator(".cta").textContent()}"`,
+    );
+    check(
+      "the collapsed section would still show how many properties are pending",
+      (await design.locator(".design__count").textContent()) === "3",
+      `the badge reads "${await design.locator(".design__count").textContent()}"`,
+    );
+
+    await design.locator(".composer__input").click();
+    await design.keyboard.type("Make the CTA louder.");
+    await design.locator(".composer .button--primary").click();
+    await design.locator(".composer").waitFor({ state: "detached", timeout: 5_000 });
+    await design.waitForTimeout(300);
+
+    check(
+      "saving the note takes the preview back off the page",
+      (await design.locator(".cta").evaluate((el) => getComputedStyle(el).fontSize)) === "16px" &&
+        (await design.locator(".cta").textContent()) === "Upgrade plan",
+      `the button is ${await design.locator(".cta").evaluate((el) => getComputedStyle(el).fontSize)} reading "${await design.locator(".cta").textContent()}"`,
+    );
+    check(
+      "and leaves no inline style attribute behind",
+      (await design.locator(".cta").evaluate((el) => el.getAttribute("style"))) === null,
+      `style attribute was ${JSON.stringify(await design.locator(".cta").evaluate((el) => el.getAttribute("style")))}`,
+    );
+
+    await design.locator('.tool[aria-label^="Annotations"]').click();
+    await design.locator(".panel").waitFor({ state: "visible", timeout: 5_000 });
+    await design.locator(".panel .button--primary").click();
+    const designReport = await design.evaluate(() => navigator.clipboard.readText());
+
+    check(
+      "the report carries the deltas as a table",
+      /\| `font-size` \| 16px \| \*\*22px\*\* \|/.test(designReport) &&
+        /\| `padding` \| 8px \| \*\*20px\*\* \|/.test(designReport),
+      designReport.split("\n").filter((line) => line.startsWith("|")).join(" / ") || "(no table)",
+    );
+    check(
+      "the report carries the rewritten text with what it replaced",
+      /\*\*Text:\*\* "Upgrade plan" → \*\*"Upgrade now"\*\*/.test(designReport),
+      designReport.split("\n").find((line) => line.includes("**Text:**")) ?? "(no text line)",
+    );
+    check(
+      "the report tells the agent to use the project's own tokens",
+      /the values above are the intent, not the patch/.test(designReport),
+      "no guidance line under the table",
+    );
+
+    // A value equal to what the element already had is not a change.
+    await design.locator(".entry").first().click();
+    await design.locator(".composer").waitFor({ state: "visible", timeout: 5_000 });
+    check(
+      "reopening a note restores the edits it was saved with",
+      (await design.locator(".design__count").textContent()) === "3",
+      `the badge reads "${await design.locator(".design__count").textContent()}" on reopen`,
+    );
+    // A badge of 3 over an element rendering none of them is the failure this catches:
+    // the preview only ever happens through the panel's callbacks, so restoring the
+    // controls has to replay them.
+    await design.waitForTimeout(250);
+    check(
+      "and puts them back on the element, not just into the controls",
+      (await design.locator(".cta").evaluate((el) => getComputedStyle(el).fontSize)) === "22px" &&
+        (await design.locator(".cta").textContent()) === "Upgrade now",
+      `the button is ${await design.locator(".cta").evaluate((el) => getComputedStyle(el).fontSize)} reading "${await design.locator(".cta").textContent()}"`,
+    );
+    await design.keyboard.press("Escape");
+    await design.waitForTimeout(200);
+    check(
+      "escaping out of an edit also puts the element back",
+      (await design.locator(".cta").evaluate((el) => el.getAttribute("style"))) === null,
+      "an inline style survived Escape",
+    );
+
+    // A note about several elements has no single thing to preview on, so the
+    // controls are absent rather than editing whichever one happens to be first.
+    await design.locator('.tool[aria-label^="Annotations"]').click();
+    await design.locator("h1").click({ modifiers: ["ControlOrMeta"], timeout: 5_000 });
+    await design.locator(".tile").click({ modifiers: ["ControlOrMeta"], timeout: 5_000 });
+    await design.keyboard.press("Enter");
+    await design.locator(".composer").waitFor({ state: "visible", timeout: 5_000 });
+    check(
+      "a multi-element note gets no design controls",
+      (await design.locator(".design").count()) === 0,
+      "design controls appeared for a note covering two elements",
+    );
+    await design.keyboard.press("Escape");
+
+    // An element that arrived with styling of its own. Read the attribute first, so the
+    // assertion compares against what the page actually authored rather than a copy of it
+    // that can drift from the fixture.
+    const keepStyle = await design.locator(".keep").evaluate((el) => el.getAttribute("style"));
+    await design.locator(".keep").click({ timeout: 5_000 });
+    await design.locator(".composer").waitFor({ state: "visible", timeout: 5_000 });
+    await design.locator(".design__toggle").click();
+
+    check(
+      "a colour the swatch cannot hold is named beside it rather than shown as black",
+      (await design
+        .locator('.design__row:has(.design__control[data-design="background-color"]) .design__unset')
+        .textContent()) === "rgba(0, 0, 0, 0)",
+      `the row read "${await design.locator('.design__row:has(.design__control[data-design="background-color"]) .design__unset').textContent()}"`,
+    );
+
+    await design.locator('.design__control[data-design="padding"]').fill("24px");
+    await design.waitForTimeout(250);
+    check(
+      "the preview beats the element's own inline declaration",
+      (await design.locator(".keep").evaluate((el) => getComputedStyle(el).paddingLeft)) === "24px",
+      `padding-left rendered at ${await design.locator(".keep").evaluate((el) => getComputedStyle(el).paddingLeft)}`,
+    );
+
+    await design.keyboard.press("Escape");
+    await design.waitForTimeout(250);
+    // `padding` is a shorthand: clearing it takes an inline `padding-left` with it, and no
+    // per-property snapshot could have seen one to put back. The `!important` is the other
+    // half — `getPropertyValue` does not carry a priority.
+    check(
+      "the revert hands back inline longhands and !important, not just the fields it knows",
+      (await design.locator(".keep").evaluate((el) => el.getAttribute("style"))) === keepStyle,
+      `style came back as ${JSON.stringify(await design.locator(".keep").evaluate((el) => el.getAttribute("style")))}, was ${JSON.stringify(keepStyle)}`,
+    );
+
+    await design.close();
+
+    // -------------------------------------------------------------------------
     // Modals — our own UI must not read as a click outside the page's dialog
     // -------------------------------------------------------------------------
     //

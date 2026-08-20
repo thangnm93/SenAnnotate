@@ -229,7 +229,45 @@ function renderAnnotation(
   }
 
   lines.push(...renderScreenshot(annotation));
+  lines.push(...renderDesign(annotation));
   lines.push(`**Feedback:** ${annotation.comment}`, "");
+  return lines;
+}
+
+/**
+ * The edits the reviewer tried on the element, as a table of deltas.
+ *
+ * A table rather than prose because every row is the same three things, and an agent
+ * scanning for "what changed" should not have to parse sentences. `from` is the value
+ * the element actually rendered as, so a row is self-contained: nothing here needs the
+ * page open to be understood.
+ *
+ * The line underneath is the whole reason this is not simply pasted CSS. Handed
+ * `padding: 20px 28px`, an agent will write exactly that; handed the same delta with
+ * this sentence, it looks for the spacing scale the repo already has. The values are
+ * a description of the intent, not the patch.
+ */
+function renderDesign(annotation: Annotation): string[] {
+  const changes = annotation.designChanges ?? [];
+  const text = annotation.textChange;
+  if (!changes.length && !text) return [];
+
+  const lines = ["**Design edits — previewed on the page, not applied to the code:**", ""];
+
+  if (changes.length) {
+    lines.push("| Property | From | To |", "|---|---|---|");
+    for (const change of changes) {
+      lines.push(`| \`${change.property}\` | ${change.from} | **${change.to}** |`);
+    }
+    lines.push("");
+  }
+
+  if (text) lines.push(`**Text:** "${text.from}" → **"${text.to}"**`, "");
+
+  lines.push(
+    "_Express these with the project's own tokens, utility classes or variables where it has them — the values above are the intent, not the patch._",
+    "",
+  );
   return lines;
 }
 
