@@ -58,6 +58,87 @@ chrome.runtime.onMessage.addListener(
 );
 
 // -----------------------------------------------------------------------------
+// Right-click menu
+// -----------------------------------------------------------------------------
+//
+// The third way in, alongside the toolbar and Alt+Shift+S, and the one that matches how
+// a debugging tool is normally reached: right-click the thing, pick it out of the menu.
+// DevTools' own *Inspect* sets that expectation and this is the same gesture.
+//
+// `chrome.contextMenus` is the only API for it and it hands an extension **no element and
+// no coordinates** — `OnClickData` carries the frame, the page URL, and any selection.
+// So the element is recorded on the content side, where `contextmenu` fires before the
+// menu opens, and these handlers only say "use it". See `docs/context-menu/context.md`.
+
+const MENU_ANNOTATE = "senannotate:annotate";
+const MENU_ANNOTATE_SELECTION = "senannotate:annotate-selection";
+const MENU_TOGGLE = "senannotate:toggle";
+
+/**
+ * Menu entries survive a browser restart, so `removeAll` runs first.
+ *
+ * Without it, `onInstalled` firing for an update on top of entries the previous version
+ * created fails with a duplicate-id error, and the entries left behind are the *old*
+ * version's — pointing at a handler that may no longer exist.
+ */
+function createMenus(): void {
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: MENU_ANNOTATE,
+      title: "Annotate this element",
+      // `page` and `frame` are not listed: the element under the pointer is what this
+      // annotates, and every context below is a click on something.
+      contexts: ["all"],
+    });
+    chrome.contextMenus.create({
+      id: MENU_ANNOTATE_SELECTION,
+      // Chrome substitutes the selected text for `%s`, truncated for the menu.
+      title: 'Annotate the text "%s"',
+      contexts: ["selection"],
+    });
+    chrome.contextMenus.create({
+      id: MENU_TOGGLE,
+      title: "Toggle inspect mode",
+      contexts: ["all"],
+    });
+  });
+}
+
+// `onInstalled` covers install and update. `onStartup` is deliberately *not* used to
+// create them a second time — the entries persist, and recreating them per browser launch
+// would be work for no change.
+chrome.runtime.onInstalled.addListener(createMenus);
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (tab?.id === undefined) return;
+
+  const message: RuntimeMessage =
+    info.menuItemId === MENU_TOGGLE
+      ? { kind: "toggle-inspect" }
+      : {
+          kind: "annotate-context",
+          selection: info.menuItemId === MENU_ANNOTATE_SELECTION,
+          // A click inside an iframe reports a non-zero frameId. The composer belongs to
+          // the top frame, so the message still goes there and this flag lets it say so
+          // rather than annotate whatever the top frame last saw — which would be the
+          // wrong element, silently.
+          inFrame: (info.frameId ?? 0) !== 0,
+        };
+
+  if (message.kind !== "toggle-inspect" && message.kind !== "annotate-context") return;
+
+  try {
+    // Always frame 0: the toolbar, the composer and the annotation store are the top
+    // frame's, and no other frame can answer for them.
+    await chrome.tabs.sendMessage(tab.id, message, { frameId: 0 });
+  } catch {
+    // No content script here — a chrome:// page, the Web Store, a PDF, or a site the
+    // user's own domain rules excluded. Nothing to do and nothing to report: the menu
+    // item is the only affordance and it has already closed.
+  }
+});
+
+// -----------------------------------------------------------------------------
 // Keyboard command
 // -----------------------------------------------------------------------------
 

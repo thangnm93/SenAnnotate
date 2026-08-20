@@ -136,6 +136,7 @@ the line and column.
 |---|---|
 | Toggle inspect mode | click **Inspect**, or <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> |
 | Annotate an element | click it |
+| Annotate one element without arming anything | **right-click it** → *Annotate this element* |
 | Annotate what you are hovering | <kbd>C</kbd> — no click, so the menu stays open |
 | Fix a mis-click | arrow keys while the note is empty, or its ↑ ↓ ← → buttons at any time |
 | Annotate some text | mode <kbd>2</kbd>, then select the text |
@@ -155,6 +156,24 @@ the line and column.
 The line under the toolbar always names what the current mode does and which keys
 switch to the others, so nothing above needs memorising. Every button on the pill names
 itself on hover — and on keyboard focus — so the icons do not have to be learned either.
+
+### Right-click, like DevTools
+
+Inspect mode is the right tool when you are working through a screen and annotating six
+things. For one problem you have already spotted, **right-click it** and pick *Annotate this
+element* — the same gesture as DevTools' *Inspect*, and the same result: no mode to turn on,
+and nothing to turn off afterwards.
+
+With text selected the menu also offers *Annotate the text "…"*, which carries the quote into
+the note. There is a *Toggle inspect mode* entry too, for when you do want the mode.
+
+None of them arm inspect mode. That is deliberate: inspect mode swallows the next click on
+the page, and a right-click on one element is a complete request on its own.
+
+The page's own right-click menu still works — SenAnnotate watches the event, it never takes
+it. One current limit: a right-click **inside an iframe** cannot be used this way, because
+the extension cannot tell which frame the browser is reporting. Use inspect mode inside
+frames; it works there.
 
 <kbd>C</kbd> is the one worth knowing about. Clicking is how you annotate, and clicking
 is also what closes the thing you wanted to annotate — a dropdown, a hover menu, a

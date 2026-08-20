@@ -206,6 +206,20 @@ let retargetToken = 0;
  */
 let screenshotPending = false;
 
+/**
+ * What the last right-click was over, and any selection it had.
+ *
+ * `chrome.contextMenus` tells an extension the frame, the page URL and the selected text,
+ * and nothing whatsoever about the element under the pointer. `contextmenu` fires before
+ * the menu opens, so recording it there is the only way the menu item can act on the thing
+ * the user right-clicked — which is the entire gesture.
+ *
+ * Not cleared after use: reopening the menu on the same element and picking the item twice
+ * should work, and the `isConnected` check at use time is what catches a stale record.
+ */
+let rightClicked: Element | null = null;
+let rightClickedText: string | null = null;
+
 // -----------------------------------------------------------------------------
 // UI
 // -----------------------------------------------------------------------------
@@ -605,6 +619,43 @@ function frameAnchor(draft: Draft): DOMRect {
 // -----------------------------------------------------------------------------
 // Creating annotations
 // -----------------------------------------------------------------------------
+
+/**
+ * Annotate whatever the last right-click was over.
+ *
+ * Deliberately does **not** turn inspect mode on. Right-clicking one element is a complete
+ * request in itself, and arming a mode that makes the next ordinary click open a composer
+ * is the surprise `toolbar-collapse/` went out of its way to prevent. Everything the
+ * composer needs — the draft, the highlight, the markers — works with the mode off already.
+ */
+async function annotateRightClicked(request: {
+  selection: boolean;
+  inFrame: boolean;
+}): Promise<void> {
+  // The composer, the annotations and the markers are the top frame's, and this frame has
+  // no way to learn which iframe was clicked: `OnClickData.frameId` is a number the DOM
+  // cannot be asked about. Annotating `rightClicked` here would silently describe whatever
+  // the *top* frame was last pointed at, which is the wrong element with a straight face.
+  if (request.inFrame) {
+    ui.toast("Right-click annotation works on the main page — inside a frame, use inspect mode", "error");
+    return;
+  }
+
+  if (!rightClicked?.isConnected) {
+    // A right-click on a page that then re-rendered, or on something `eligible` refused —
+    // our own overlay, a `<script>`, the `<html>` element.
+    ui.toast("Nothing to annotate there", "error");
+    return;
+  }
+
+  // A right-click is a fresh subject. Anything half-finished belongs to the previous one.
+  closeComposer();
+  clearPicked();
+  resetMarquee();
+
+  const selectedText = request.selection ? (rightClickedText ?? undefined) : undefined;
+  await beginAnnotation([rightClicked], selectedText);
+}
 
 async function beginAnnotation(elements: Element[], selectedText?: string): Promise<void> {
   const draft = await captureDraft(elements, { settings, selectedText });
@@ -1551,8 +1602,36 @@ function installTopFrame(): void {
       sendResponse({ ok: true });
       return true;
     }
+    if (message.kind === "annotate-context") {
+      void annotateRightClicked(message);
+      sendResponse({ ok: true });
+      return true;
+    }
     return false;
   });
+
+  // Recorded whether or not inspect mode is on, which is the whole point: the menu item is
+  // an entry point for someone who has armed nothing, the way DevTools' *Inspect* is.
+  //
+  // Capture phase, because a page that calls `stopPropagation` on `contextmenu` — every app
+  // with a custom right-click menu does — would otherwise take the element with it. Passive
+  // and never cancelled: the page's own menu, or Chrome's, still opens. We are only
+  // watching.
+  listen(
+    document,
+    "contextmenu",
+    (event) => {
+      // `elementFromPoint` rather than `event.target`, for the same reason the click handler
+      // uses it: it is the one lookup that sees through our own `pointer-events: none`
+      // overlay to what the user was actually pointing at.
+      const target = document.elementFromPoint(event.clientX, event.clientY);
+      rightClicked = target && eligible(target) ? target : null;
+      // Read now, not when the menu item fires: opening a context menu can collapse the
+      // selection on some platforms, and by then it would be gone.
+      rightClickedText = window.getSelection()?.toString().trim() || null;
+    },
+    { capture: true, passive: true },
+  );
 
   async function refreshSettings(): Promise<void> {
     settings = await loadSettings();

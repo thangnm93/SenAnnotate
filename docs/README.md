@@ -261,6 +261,15 @@ things: why a card this tall cannot use the composer's "prefer, flip, clamp" pla
 why the default corner is left entirely to CSS. The `changelog.md` records the e2e trap —
 a vertical drag gesture whose first step leaves the pill never starts one.
 
+## [`context-menu/`](./context-menu/) — unreleased
+
+Right-click an element and annotate it, with no mode to arm first — the gesture DevTools'
+*Inspect* established. Its `context.md` is the one to read: `chrome.contextMenus` gives an
+extension **no element and no coordinates**, so the whole design is a capture-phase recorder
+in the page plus a menu click that only says "use it". It also records why a right-click
+inside an iframe is *reported* rather than handled, and the security-relevant change to the
+frame boundary that fixing it would need.
+
 ## [`release-changelog/`](./release-changelog/) — generated release notes
 
 `CHANGELOG.md`, rebuilt from the tags and the Conventional Commit subjects between them,

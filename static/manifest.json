@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "SenAnnotate — visual annotator",
+  "name": "SenAnnotate \u2014 visual annotator",
   "version": "0.2.0",
   "description": "Click any element on any page, add a note, and copy structured Markdown that points your AI coding agent at exactly what to change.",
   "minimum_chrome_version": "111",
@@ -24,19 +24,34 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["storage", "activeTab", "clipboardWrite"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "clipboardWrite",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["inspector.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "inspector.js"
+      ],
       "world": "MAIN",
       "run_at": "document_start",
       "all_frames": true
     },
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
       "world": "ISOLATED",
       "run_at": "document_idle",
       "all_frames": true
@@ -44,7 +59,9 @@
   ],
   "commands": {
     "toggle-inspect": {
-      "suggested_key": { "default": "Alt+Shift+S" },
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
       "description": "Toggle SenAnnotate inspect mode"
     }
   }

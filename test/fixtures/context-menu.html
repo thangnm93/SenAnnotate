@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Context menu fixture</title>
+    <style>
+      body { margin: 0; font: 14px/1.4 system-ui, sans-serif; padding: 24px; }
+      .ctxcard, .ctxprose, .ctxeater { padding: 18px; border: 1px solid #d4d4d8; margin-bottom: 16px; }
+      .ctxbutton { padding: 10px 16px; border: 1px solid #2563eb; background: #eff6ff; }
+    </style>
+  </head>
+  <body>
+    <!--
+      Its own fixture, because this block asserts on the composer's Element row and on a
+      report — a page an earlier block annotated would open with notes already on it.
+
+      **The document-level canceller below is what makes this testable at all**, and it is
+      not a shortcut. The suite drives a *real* right-click (through CDP, so the
+      `contextmenu` event and its coordinates are genuine — a synthesised `dispatchEvent`
+      produces a plain `Event` with no `clientX`, and `elementFromPoint` then resolves
+      nothing). A real right-click also opens **Chrome's own context menu**, which in a
+      headed run is an OS-level widget Playwright cannot dismiss, and the suite is headed.
+      `preventDefault` stops that menu without stopping the event, so our capture-phase
+      listener still sees exactly what it would see on a real page.
+
+      The three blocks carry *different* class names on purpose. `identifyElement` falls back
+      to `tag.class` for an element with no accessible name, so a shared `.ctxcard` would make
+      all three read the same and no assertion here could tell them apart — the trap
+      `retarget.html` hit, where a check passed for the wrong reason.
+
+      It is also the realistic case rather than a contrived one: an app with its own
+      right-click menu cancels the event, and `#ctxmenu-eater` goes further and
+      `stopPropagation`s it too, which is precisely what our capture phase exists for.
+    -->
+    <div class="ctxcard" id="ctxcard">
+      <button class="ctxbutton" id="ctxbutton"><span id="ctxlabel">Place order</span></button>
+    </div>
+    <p class="ctxprose" id="ctxtext">Some prose worth quoting in a note about the wording.</p>
+    <div class="ctxeater" id="ctxmenu-eater">A card with its own right-click menu.</div>
+
+    <script>
+      // Bubble phase, so SenAnnotate's capture-phase listener has already run.
+      document.addEventListener("contextmenu", (event) => event.preventDefault());
+
+      // The hostile shape: cancels *and* stops propagation, so the document handler above
+      // never runs for this element and a bubble-phase extension listener would see nothing.
+      document.getElementById("ctxmenu-eater").addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+    </script>
+  </body>
+</html>

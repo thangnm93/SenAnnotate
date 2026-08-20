@@ -142,7 +142,24 @@ export type RuntimeMessage =
   /** background/popup → content, after settings changed. */
   | { kind: "settings-changed" }
   /** popup → background, asking for the active tab's annotation count. */
-  | { kind: "get-status" };
+  | { kind: "get-status" }
+  /**
+   * background → content, from the right-click menu.
+   *
+   * Carries no element and no coordinates, because `chrome.contextMenus` gives an
+   * extension neither: `OnClickData` has the frame, the page URL and any selection, and
+   * nothing about what was under the pointer. The content script therefore records the
+   * element on `contextmenu` — which fires *before* the menu opens — and this message is
+   * only the instruction to use what was recorded.
+   *
+   * `selection` distinguishes the two menu items: the element one annotates what was
+   * right-clicked, the selection one annotates the highlighted text.
+   *
+   * `inFrame` is true when the click happened inside an iframe. The composer is a
+   * top-frame thing, so that case is reported rather than half-handled — see
+   * `docs/context-menu/context.md`.
+   */
+  | { kind: "annotate-context"; selection: boolean; inFrame: boolean };
 
 export type RuntimeResponse =
   | { ok: true; dataUrl?: string; count?: number; active?: boolean }
