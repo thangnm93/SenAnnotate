@@ -262,6 +262,16 @@ Notes are only in `chrome.storage.local` until you move them, so the popup offer
 *Clear all*, for handing a review to someone else, or for moving between machines.
 Import merges — it never replaces what is already there.
 
+Notes are filed under the site they were taken on, so a review captured on staging would
+land on a key your dev server never opens. Tick **Import onto this site** and every page
+in the file moves onto the origin in the current tab, path kept.
+
+**Save .html** is the third format, for a reader who has no extension: one document with
+every note and every screenshot embedded, no script and nothing loaded from the network —
+a content security policy inside the file says so, so the recipient's browser enforces it
+rather than taking our word — which opens in any browser. Screenshots only travel when **Screenshots** is set to embed —
+a path points at *your* Downloads folder, not theirs.
+
 ## Screenshots
 
 The camera button in the composer photographs the element and opens a small editor

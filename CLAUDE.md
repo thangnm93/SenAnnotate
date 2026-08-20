@@ -69,11 +69,14 @@ That single fact forces the three-context split:
 | `popup.js` (IIFE) | popup page | `src/popup/` | settings |
 
 `src/shared/` is the only code all four import: `types.ts`, `protocol.ts` (wire protocol +
-storage keys), `output.ts` (the Markdown report), `archive.ts` (export/import), `accent.ts`
+storage keys), `output.ts` (the Markdown report), `archive.ts` (export/import), `share.ts`
+(the self-contained `.html` review), `download.ts` (save a blob the plain DOM way), `accent.ts`
 (the accent colour and the two shades derived from it). Nothing in `popup/` or `background/`
 may import from `content/` — that inversion is what put `archive.ts` in `shared/` rather than
-next to `content/storage.ts`, and it is why `accent.ts` returns colours rather than CSS
-variable names: the overlay calls them `--sa-accent*` and the popup calls them `--accent*`.
+next to `content/storage.ts`, and `download.ts` is the same rule with a second worked example:
+the popup saves files too, so the saver cannot live in `content/`. It is also why `accent.ts`
+returns colours rather than CSS variable names: the overlay calls them `--sa-accent*` and the
+popup calls them `--accent*`.
 
 **Both content scripts run with `all_frames: true`.** `src/content/index.ts` therefore
 ends in a branch, and it is the most important line in the file:
@@ -152,6 +155,12 @@ round-trip, and works identically with no framework at all. Keep it that way.
   *and* `setTimeout`, so any in-page polling loop — including Playwright's, whichever
   `polling` you pass — is held by the state it is waiting for. Use a Node-side
   `waitForTimeout` plus one `evaluate`.
+- **`shared/share.ts` is the only HTML sink in the project.** Everything it emits goes
+  through the `html` tagged template, which escapes every interpolation; `raw()` is the one
+  spelled exception and its arguments are validated first (a `data:` image URI matched against
+  an allowlist, never an `svg+xml` — SVG runs script). The exported file also carries its own
+  CSP. A second sink, or one `+` concatenation past the template, is an XSS hole in a file
+  people forward to colleagues.
 - **Privacy guarantees have tests and must not regress:** field *values* are never recorded
   (the trail says `Edited Password`), request/response bodies are never recorded, and
   credential-looking query params are `[redacted]` before storage.

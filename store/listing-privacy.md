@@ -33,7 +33,8 @@ assistant or a colleague without anyone guessing which element was meant.
 
 That is its only function. It does not modify, block or inject anything into the pages it
 inspects beyond its own floating toolbar, and it has no server: everything it produces stays
-on the user's device until the user copies the report or saves a screenshot.
+on the user's device until the user copies the report, saves a screenshot, or saves the notes
+as a file.
 ```
 
 ---
@@ -88,7 +89,8 @@ what led to the problem. That record holds at most 60 entries of each kind, is n
 to disk, and is discarded when the page reloads. Values typed into fields are never recorded
 and credential-like query parameters are redacted. The page's DOM is read in detail only when
 the user turns inspect mode on and clicks an element. The extension makes no network request
-of its own, so nothing from any page ever leaves the browser.
+of its own, so nothing from any page is transmitted anywhere; the notes go to the user's own
+disk only when the user saves them as a file.
 ```
 
 ---
