@@ -8,11 +8,23 @@
 // export/import.
 //
 // The popup still reads settings — it paints itself from `theme` and `accentColor` —
-// but no longer writes any. One owner, one writer.
+// and writes exactly one group of them: the domain rules.
+//
+// That is a deliberate exception to "one owner, one writer", and the reason is the whole
+// point of the feature. The settings card lives *inside the overlay*, and the overlay is
+// precisely what a blocked domain does not get. A setting that can switch the UI off
+// cannot be edited from inside that UI — you would have to visit an allowed site to give
+// yourself back the site you excluded. The popup is the only surface that opens on every
+// page, including the ones where nothing was injected at all.
 // =============================================================================
 
 import { accentTheme } from "../shared/accent";
 import { clearAllPages, exportAll, importAll } from "../shared/archive";
+import {
+  DOMAIN_RULE_OPTIONS,
+  evaluateHost,
+  parseRuleList,
+} from "../shared/domain-rules";
 import { generateSessionOutput } from "../shared/output";
 import { SETTINGS_KEY, type RuntimeMessage, type RuntimeResponse } from "../shared/protocol";
 import { DEFAULT_SETTINGS, type Annotation, type Settings } from "../shared/types";
@@ -30,6 +42,10 @@ const exportButton = $<HTMLButtonElement>("export");
 const importButton = $<HTMLButtonElement>("import");
 const importInput = $<HTMLInputElement>("import-file");
 const archiveHint = $("archive-hint");
+const ruleModeSelect = $<HTMLSelectElement>("rule-mode");
+const rulesInput = $<HTMLTextAreaElement>("rules");
+const verdictBox = $("verdict");
+const verdictText = $("verdict-text");
 /** Preset colour → its button, so the current one can be marked without a re-render. */
 
 let settings: Settings = { ...DEFAULT_SETTINGS };
@@ -49,6 +65,8 @@ async function loadSettings(): Promise<void> {
   }
 
   applyAccent();
+  paintRules();
+  await refreshVerdict();
 }
 
 // -----------------------------------------------------------------------------
@@ -77,6 +95,22 @@ async function activeTabId(): Promise<number | null> {
   return tab?.id ?? null;
 }
 
+/**
+ * The active tab's hostname, or `null` when there is nothing a rule could match.
+ *
+ * Read from the tab's URL rather than asked of the content script, because the whole
+ * situation this has to describe is the one where **no content script is running**.
+ */
+async function activeTabHost(): Promise<string | null> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.url) return null;
+  try {
+    return new URL(tab.url).hostname || null;
+  } catch {
+    return null;
+  }
+}
+
 async function askTab(message: RuntimeMessage): Promise<RuntimeResponse | null> {
   const tabId = await activeTabId();
   if (tabId === null) return null;
@@ -93,9 +127,19 @@ async function refreshStatus(): Promise<void> {
 
   if (!response?.ok) {
     statusBox.dataset.detected = "false";
-    statusText.textContent = "Not available on this page";
     statusCount.textContent = "";
     toggleButton.disabled = true;
+
+    // "Not available" is also what a chrome:// page gets, and the two need telling apart:
+    // one is the browser's rule and permanent, the other is the user's own and one line
+    // away from being changed. The Sites section below says which pattern did it.
+    const host = await activeTabHost();
+    const excluded =
+      host !== null &&
+      settings.domainRuleMode !== "off" &&
+      !evaluateHost(host, settings.domainRuleMode, settings.domainRules).enabled;
+
+    statusText.textContent = excluded ? "Off on this site by your rules" : "Not available on this page";
     return;
   }
 
@@ -105,6 +149,94 @@ async function refreshStatus(): Promise<void> {
   toggleButton.disabled = false;
   toggleButton.textContent = response.active ? "Stop inspecting" : "Start inspecting";
 }
+
+// -----------------------------------------------------------------------------
+// Domain rules — the one group of settings this document owns
+// -----------------------------------------------------------------------------
+
+function paintRules(): void {
+  if (!ruleModeSelect.options.length) {
+    for (const { value, label, hint } of DOMAIN_RULE_OPTIONS) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      option.title = hint;
+      ruleModeSelect.append(option);
+    }
+  }
+  ruleModeSelect.value = settings.domainRuleMode;
+  // The list is meaningless in `off` mode, and a live-looking field that changes nothing
+  // is worse than a disabled one. The contents are kept, so switching back restores them.
+  rulesInput.disabled = settings.domainRuleMode === "off";
+  // Only rewritten when it does not have focus: doing it mid-typing would move the caret
+  // to the end on every keystroke.
+  if (document.activeElement !== rulesInput) rulesInput.value = settings.domainRules.join("\n");
+}
+
+/**
+ * Say whether *this* tab is covered, and by which pattern.
+ *
+ * The verdict is computed here rather than read off the content script for the same
+ * reason `activeTabHost` exists: on a page the rules excluded there is nothing to ask.
+ */
+async function refreshVerdict(): Promise<void> {
+  const host = await activeTabHost();
+
+  if (settings.domainRuleMode === "off") {
+    verdictBox.dataset.state = "on";
+    verdictText.textContent = "Running everywhere the browser allows.";
+    return;
+  }
+
+  if (!host) {
+    verdictBox.dataset.state = settings.domainRuleMode === "allowlist" ? "off" : "on";
+    verdictText.textContent =
+      settings.domainRuleMode === "allowlist"
+        ? "This page has no hostname, so no pattern but * can cover it."
+        : "This page has no hostname, so no pattern excludes it.";
+    return;
+  }
+
+  const { enabled, rule } = evaluateHost(host, settings.domainRuleMode, settings.domainRules);
+  verdictBox.dataset.state = enabled ? "on" : "off";
+
+  const because = rule ? `matches ${rule}` : "matches nothing in the list";
+  verdictText.replaceChildren();
+  const hostSpan = document.createElement("span");
+  hostSpan.className = "verdict__host";
+  hostSpan.textContent = host;
+  verdictText.append(
+    hostSpan,
+    document.createTextNode(` ${because} — SenAnnotate is ${enabled ? "on" : "off"} here.`),
+  );
+}
+
+async function saveRules(patch: Partial<Settings>): Promise<void> {
+  settings = { ...settings, ...patch };
+  try {
+    // Read-modify-write on the whole object, because the settings card owns every other
+    // field and may have changed one since this popup opened.
+    const stored = await chrome.storage.sync.get(SETTINGS_KEY);
+    const current = (stored[SETTINGS_KEY] as Partial<Settings>) ?? {};
+    await chrome.storage.sync.set({ [SETTINGS_KEY]: { ...current, ...patch } });
+  } catch {
+    // Over quota, or storage disabled. The verdict below would then describe a rule that
+    // was not saved, so it is repainted from `settings` either way and a reload will show
+    // the truth.
+  }
+  paintRules();
+  await refreshVerdict();
+}
+
+ruleModeSelect.addEventListener("change", () => {
+  void saveRules({ domainRuleMode: ruleModeSelect.value as Settings["domainRuleMode"] });
+});
+
+// On `change` rather than on every keystroke: a rule list is edited in bursts, and saving
+// per character would write to `sync` — which is quota'd per minute — dozens of times.
+rulesInput.addEventListener("change", () => {
+  void saveRules({ domainRules: parseRuleList(rulesInput.value) });
+});
 
 toggleButton.addEventListener("click", async () => {
   await askTab({ kind: "toggle-inspect" });
@@ -255,6 +387,7 @@ clearButton.addEventListener("click", async () => {
   await refreshStatus();
 });
 
-void loadSettings();
-void refreshStatus();
+// `refreshStatus` reads the domain rules to explain a page it could not reach, so it runs
+// after the settings are in rather than racing them.
+void loadSettings().then(() => refreshStatus());
 void refreshPages();

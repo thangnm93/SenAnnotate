@@ -7,6 +7,7 @@
 // =============================================================================
 
 import { formatSource, generateOutput } from "../shared/output";
+import { evaluateHost } from "../shared/domain-rules";
 import { HIDDEN_KEY } from "../shared/protocol";
 import type { RuntimeMessage, RuntimeResponse } from "../shared/protocol";
 import {
@@ -1871,14 +1872,53 @@ function installTopFrame(): void {
   void boot();
 }
 
+/**
+ * Whether the domain rules let the extension run on this document at all.
+ *
+ * Asked *before* anything is built, which is why the entry below is async where it used
+ * to be a plain branch. The alternative — build the UI and hide it, the way
+ * `hideUntilRestart` does — is wrong for this one: a blocked site is a site the user has
+ * said the extension has no business on, and "no business" includes not patching its
+ * heap, not answering the popup for it, and not attaching a listener to its document. A
+ * hidden toolbar is still all of those.
+ *
+ * The cost is a `chrome.storage.sync` read before the first paint of our own UI, which is
+ * a handful of milliseconds on a path that already waits for `document_idle`. A flash of
+ * toolbar on a site the user excluded would be worse than that, and would be the one
+ * thing this feature exists to prevent.
+ *
+ * Failing open on a storage error is deliberate: an unreadable setting must not look like
+ * an uninstalled extension. `loadSettings` already returns the defaults in that case, and
+ * the default mode is `off`.
+ */
+async function domainAllowsRunning(): Promise<boolean> {
+  settings = await loadSettings();
+  return evaluateHost(location.hostname, settings.domainRuleMode, settings.domainRules).enabled;
+}
+
+/**
+ * The rules are re-read on change, but they take effect on the **next load** of a page,
+ * not immediately.
+ *
+ * Turning an installed overlay off mid-session would mean tearing down state a user may
+ * be halfway through — annotations typed, a composer open — with nothing on screen to say
+ * why it vanished. Turning it *on* mid-session is the harder half: `installTopFrame` is
+ * not re-entrant, and the inspector in the MAIN world has already decided what to patch.
+ * A reload is one keystroke and is what the popup tells the user to do.
+ */
 if (isTopFrame()) {
-  installTopFrame();
+  void domainAllowsRunning().then((allowed) => {
+    if (allowed) installTopFrame();
+  });
 } else if (isFrameWorthInstrumenting()) {
-  // The child needs settings for the detail level `captureDraft` works to, and
-  // nothing else — no annotations, no diagnostics, no badge.
-  installChildFrame(() => settings);
-  void loadSettings().then((next) => {
-    settings = next;
+  // A child frame answers to *its own* host, not the top frame's: an excluded analytics
+  // or payment iframe on an allowed page must stay untouched, and the rules are written
+  // as hostnames precisely so that reading works.
+  void domainAllowsRunning().then((allowed) => {
+    // The child needs settings for the detail level `captureDraft` works to, and
+    // nothing else — no annotations, no diagnostics, no badge. `domainAllowsRunning`
+    // has already assigned them.
+    if (allowed) installChildFrame(() => settings);
   });
 }
 

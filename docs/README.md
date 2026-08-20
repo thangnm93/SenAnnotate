@@ -261,6 +261,15 @@ things: why a card this tall cannot use the composer's "prefer, flip, clamp" pla
 why the default corner is left entirely to CSS. The `changelog.md` records the e2e trap —
 a vertical drag gesture whose first step leaves the pill never starts one.
 
+## [`domain-rules/`](./domain-rules/) — unreleased
+
+An allowlist or blocklist of host patterns, so the extension can be kept off a customer's
+production site entirely. Its `context.md` is the one to read before adding any other
+setting that can switch the UI off: it argues why this one is edited in the **popup** rather
+than the toolbar's settings card (the card lives inside the overlay a blocked site does not
+get), why the check happens *before* anything is built rather than hiding the host the way
+`hide-until-restart/` does, and why `*` deliberately matches only one label.
+
 ## [`release-changelog/`](./release-changelog/) — generated release notes
 
 `CHANGELOG.md`, rebuilt from the tags and the Conventional Commit subjects between them,

@@ -79,8 +79,15 @@ variable names: the overlay calls them `--sa-accent*` and the popup calls them `
 ends in a branch, and it is the most important line in the file:
 
 ```ts
-if (isTopFrame()) installTopFrame();
-else if (isFrameWorthInstrumenting()) installChildFrame(() => settings);
+if (isTopFrame()) {
+  void domainAllowsRunning().then((allowed) => {
+    if (allowed) installTopFrame();
+  });
+} else if (isFrameWorthInstrumenting()) {
+  void domainAllowsRunning().then((allowed) => {
+    if (allowed) installChildFrame(() => settings);
+  });
+}
 ```
 
 Everything with a side effect — `createUiRoot()`, the three UI constructors,
@@ -89,10 +96,21 @@ for that reason. Adding a new module-scope `listen(...)` or constructor to that 
 puts it in every iframe on the page: a second toolbar, a second answer to the popup's
 `get-status`, a second owner of the annotations. Put it inside `installTopFrame()`.
 
+**And inside the `then`, not next to it.** `domainAllowsRunning()` reads `chrome.storage`,
+so the branch is asynchronous: a side effect placed beside the `void …then(…)` rather than
+within it runs on every page, including the ones the user excluded — which is the whole
+feature defeated, silently. A child frame answers to its own host, not the top frame's.
+
 Rules that fall out of this and are easy to violate:
 
-- **`world: "MAIN"` is declared in the manifest, never injected at runtime.** Declarative
-  content scripts are exempt from the page's CSP; an injected `<script>` is not.
+- **`world: "MAIN"` is a *declarative* registration, never an injected `<script>`.**
+  Declarative content scripts are exempt from the page's CSP; an injected `<script>` is not.
+  The declaration lives in `src/background/inspector-script.ts`, not `static/manifest.json`:
+  the worker registers `inspector.js` through `chrome.scripting` so the domain rules can
+  keep it off an excluded host entirely, which the manifest cannot express. It is still
+  declarative and still CSP-exempt. The cost is a readiness window — a registration only
+  governs navigations that begin after it resolves, so a page loading in the moment after
+  install has no MAIN world until it is reloaded (`docs/domain-rules/changelog.md`).
 - **The inspector must not snapshot anything at module load** — it runs before the app mounts.
   It is purely reactive: it sits on the bridge and answers.
 - **Freeze and diagnostics have to live in MAIN.** Patching `setTimeout` from ISOLATED patches

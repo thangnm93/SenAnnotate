@@ -147,6 +147,7 @@ the line and column.
 | Hide the overlay on this tab | **Hide until restart** in settings — back on any other tab, or when this one is closed |
 | Collapse the toolbar | <kbd>H</kbd>, or the `»` button — this also leaves inspect mode and closes the open card |
 | Move the toolbar | drag it anywhere |
+| Keep it off certain sites | **Sites** in the extension popup — an allowlist or a blocklist |
 | Copy the report | **Copy report** in the panel |
 | Save the report as a file | **.md** in the panel |
 | Copy every page at once | **Copy session report** in the extension popup |
@@ -186,6 +187,48 @@ The position is remembered **per page**, the same way annotations are: move it o
 the way of the checkout page's order summary and it stays there on that page, while
 every other page keeps the default corner. It is clamped back into view if you later
 open the same page in a narrower window.
+
+### Keeping it off certain sites
+
+**Sites**, in the extension popup, is a list of host patterns read one of two ways: *only
+these sites*, or *every site except these*. The default is neither — it runs everywhere
+the browser allows, and an upgrade does not change that.
+
+| Pattern | Matches |
+|---|---|
+| `example.com` | `example.com` **and** every subdomain of it |
+| `*.example.com` | the subdomains only — not `example.com` itself |
+| `*.staging.example.com` | `a.staging.example.com`, but not `staging.example.com` |
+| `foo.*` | `foo.com`, `foo.dev` — one label, so **not** `foo.co.uk` |
+| `localhost` | `localhost` |
+| `*` | everything, including pages with no hostname |
+
+Pasting a whole URL works — the scheme, path and port are ignored. One pattern per line, or
+comma-separated. A line starting with `#` is a comment.
+
+On an excluded site **nothing is injected at all**: no toolbar, no listeners, and no
+diagnostics capture patching the page's `fetch`. That is the point of the setting rather
+than a side effect — a hidden toolbar would still be all of those things. Chrome is told not
+to load the page script there, rather than the script loading and deciding to keep quiet.
+The popup still opens, tells you which pattern excluded the tab, and is where you undo it.
+
+One caveat for the two widest pattern shapes. `foo.*` and `*.example.com` have no exact
+equivalent in Chrome's own match-pattern syntax, so they cannot be part of what Chrome is
+told; on hosts they exclude, the page script still loads and keeps quiet the way the rest of
+the overlay does. Everything you can see behaves identically — no toolbar, no listeners, no
+diagnostics — and the plain forms (`example.com`, `localhost`, an IP address, `*`) get the
+stronger guarantee. Name a site plainly if that distinction matters to you.
+
+Changes apply the **next time a page loads**, so reload the tab you are looking at. The list
+lives in the popup rather than the toolbar's gear for the obvious reason: on an excluded
+site there is no toolbar to open.
+
+The same "next page load" rule covers one more moment: **right after you install or update
+the extension, reload the tab you want to work on.** Telling Chrome which hosts to load the
+page script on is something the extension does when it starts, and a page already loading in
+that instant gets no framework detection, no freeze and no diagnostics until it is reloaded.
+One reload, once — and it is the same reload an already-open tab has always needed after an
+install.
 
 Dragging a box selects **everything it fully contains**, at the shallowest level
 contained — draw around three cards and you get three cards, not the `<div>`s

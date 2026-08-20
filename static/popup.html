@@ -159,6 +159,51 @@
         cursor: pointer;
       }
 
+      /* One pattern per line, so the field has to be a block rather than a `.field` row. */
+      .rules {
+        width: 100%;
+        min-height: 66px;
+        margin: 6px 0 0;
+        padding: 6px 7px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--fg);
+        font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        resize: vertical;
+      }
+
+      .rules:disabled {
+        background: var(--sunken);
+        color: var(--muted);
+      }
+
+      /* Says what the *current* tab's verdict is, which is the only part of a rule list
+         anyone reads twice. Tinted rather than merely worded: it answers "why is the
+         toolbar not there" at a glance. */
+      .verdict {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        margin: 8px 0 0;
+        padding: 7px 9px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: var(--sunken);
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+
+      .verdict[data-state="off"] {
+        border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+        color: var(--fg);
+      }
+
+      .verdict__host {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: var(--fg);
+      }
+
       /* The accent row: presets for one click, a picker for an exact brand colour, and a
          way back to the shipped orange. */
       .field .swatches {
@@ -323,6 +368,28 @@
       Settings moved into the toolbar — open any page you can annotate and click the
       <strong>gear</strong>. They apply everywhere, so you only have to set them once.
     </p>
+
+    <h2>Sites</h2>
+    <div class="field">
+      <label for="rule-mode">Run SenAnnotate on</label>
+      <select id="rule-mode"></select>
+    </div>
+    <textarea
+      id="rules"
+      class="rules"
+      spellcheck="false"
+      autocapitalize="off"
+      aria-label="Host patterns, one per line"
+      placeholder="example.com&#10;*.staging.example.com&#10;localhost"
+    ></textarea>
+    <p class="hint" id="rules-hint">
+      One host per line. <code>example.com</code> covers its subdomains;
+      <code>*.example.com</code> covers only the subdomains; <code>foo.*</code> matches one
+      label. Pasting a whole URL is fine. Takes effect when a page next loads.
+    </p>
+    <div class="verdict" id="verdict" data-state="on">
+      <span id="verdict-text">Checking this tab…</span>
+    </div>
 
     <h2>Pages</h2>
     <div id="pages" class="pages"></div>

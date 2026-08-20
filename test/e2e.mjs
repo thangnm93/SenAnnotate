@@ -143,6 +143,30 @@ async function main() {
   try {
     await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: base });
 
+    // The MAIN-world inspector is registered by the service worker, not declared in the
+    // manifest, so the extension has a readiness point that a declarative one does not:
+    // `registerContentScripts` only affects navigations that *begin* after it resolves.
+    // Navigate inside that window and the page loads with no MAIN world at all — measured,
+    // and it is not subtle: the first navigation reports no framework while every later one
+    // reports Vue correctly. Seven checks in the Vue block failed exactly this way.
+    //
+    // Waiting here rather than reloading in the Vue block, because the condition is not
+    // Vue's: every framework block, the freeze and the diagnostics all need that world. The
+    // product-level cost of the same window — a page loaded in the moment after install has
+    // no inspector until it is reloaded — is recorded in `docs/domain-rules/changelog.md`.
+    {
+      let [ready] = context.serviceWorkers();
+      if (!ready) ready = await context.waitForEvent("serviceworker", { timeout: 10_000 });
+      const deadline = Date.now() + 10_000;
+      for (;;) {
+        const registered = await ready
+          .evaluate(() => chrome.scripting.getRegisteredContentScripts())
+          .catch(() => []);
+        if (registered.length || Date.now() > deadline) break;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+
     // -------------------------------------------------------------------------
     // Vue 3
     // -------------------------------------------------------------------------
@@ -3269,6 +3293,113 @@ async function main() {
       }
 
       await popup.close();
+    }
+
+    // -------------------------------------------------------------------------
+    // Domain rules — where the extension is allowed to run
+    // -------------------------------------------------------------------------
+    //
+    // **Last in the run, and it restores `off` + an empty list before it ends.** The rules
+    // live in chrome.storage.sync, shared by every page in this profile, so a rule left
+    // behind switches the extension off for everything after it — and the symptom is a
+    // `.toolbar` locator timing out, which looks nothing like the cause.
+    //
+    // The fixture origin is `127.0.0.1`, which is what the patterns below have to match.
+    if (extensionId) {
+      const rulesPopup = await context.newPage();
+      await rulesPopup.goto(`chrome-extension://${extensionId}/popup.html`);
+      await rulesPopup.locator("#rule-mode").waitFor({ state: "visible", timeout: 10_000 });
+
+      /** Set the mode and the list, the way a user would, and wait for the write. */
+      const setRules = async (mode, list) => {
+        await rulesPopup.locator("#rule-mode").selectOption(mode);
+        await rulesPopup.waitForTimeout(200);
+        if (mode !== "off") {
+          await rulesPopup.locator("#rules").fill(list);
+          // `fill` does not always end with a `change` for a textarea, and `change` is what
+          // the popup listens on — saving per keystroke would hammer sync's per-minute quota.
+          await rulesPopup.locator("#rules").dispatchEvent("change");
+        }
+        await rulesPopup.waitForTimeout(400);
+      };
+
+      /** Does the toolbar turn up on a *fresh* load? The rules apply per page load. */
+      const toolbarAppears = async () => {
+        const probe = await context.newPage();
+        await probe.goto(`${base}/rules.html`);
+        // No `waitFor` — the assertion is about absence, and a wait would be the timeout.
+        await probe.waitForTimeout(2_500);
+        const count = await probe.locator(".toolbar").count();
+        await probe.close();
+        return count > 0;
+      };
+
+      await setRules("blocklist", "127.0.0.1");
+      check(
+        "a blocklisted host gets no toolbar at all",
+        (await toolbarAppears()) === false,
+        "the toolbar was injected on a blocklisted host",
+      );
+
+      // Not merely hidden: nothing was built, so the popup cannot reach a content script —
+      // and it has to say *why*, or this is indistinguishable from a chrome:// page.
+      const blocked = await context.newPage();
+      await blocked.goto(`${base}/rules.html`);
+      await blocked.waitForTimeout(1_500);
+      await rulesPopup.reload();
+      await rulesPopup.locator("#rule-mode").waitFor({ state: "visible", timeout: 10_000 });
+      await rulesPopup.waitForTimeout(900);
+      check(
+        "the popup says the site is off by the user's own rules",
+        /off on this site by your rules/i.test(
+          (await rulesPopup.locator("#status-text").textContent()) ?? "",
+        ),
+        `status read "${((await rulesPopup.locator("#status-text").textContent()) ?? "").trim()}"`,
+      );
+      check(
+        "the popup names the pattern that decided it",
+        ((await rulesPopup.locator("#verdict-text").textContent()) ?? "").includes("127.0.0.1"),
+        `verdict read "${((await rulesPopup.locator("#verdict-text").textContent()) ?? "").trim()}"`,
+      );
+      await blocked.close();
+
+      // An allowlist that does not name this host excludes it — the other reading of the
+      // same list, and the direction that fails closed.
+      await setRules("allowlist", "example.com");
+      check(
+        "an allowlist that does not cover the host keeps the toolbar away",
+        (await toolbarAppears()) === false,
+        "the toolbar was injected on a host missing from the allowlist",
+      );
+
+      // A wildcard label, which is the part of the syntax a plain string compare would miss.
+      await setRules("allowlist", "127.0.0.*");
+      check(
+        "a wildcard label matches, so the allowlist admits the host",
+        (await toolbarAppears()) === true,
+        "the toolbar stayed away despite a matching wildcard",
+      );
+
+      // A bare domain is meant to cover its subdomains. `127.0.0.1` has no subdomains to
+      // test with, so this checks the other half of that rule: a *longer* pattern must not
+      // match a shorter host, or `example.com` in a blocklist would take unrelated sites
+      // with it.
+      await setRules("allowlist", "sub.127.0.0.1");
+      check(
+        "a pattern longer than the host does not match it",
+        (await toolbarAppears()) === false,
+        "a longer pattern matched a shorter host",
+      );
+
+      // Restore, and prove the restore worked rather than assuming it.
+      await setRules("off", "");
+      check(
+        "turning the rules off brings the toolbar back everywhere",
+        (await toolbarAppears()) === true,
+        "the toolbar did not come back after the rules were turned off",
+      );
+
+      await rulesPopup.close();
     }
 
     // Surviving an actual version upgrade is asserted by `test/upgrade.mjs`, which runs

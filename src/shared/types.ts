@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { DEFAULT_ACCENT } from "./accent";
+import type { DomainRuleMode } from "./domain-rules";
 
 export type OutputDetailLevel = "compact" | "standard" | "detailed" | "forensic";
 
@@ -341,6 +342,18 @@ export interface Settings {
    * hover and text-on-accent shades from it.
    */
   accentColor: string;
+  /**
+   * Whether `domainRules` is consulted, and which way it reads. See
+   * `shared/domain-rules.ts` for the matcher and for why one list beats two.
+   */
+  domainRuleMode: DomainRuleMode;
+  /**
+   * Host patterns — `example.com`, `*.example.com`, `foo.*`, `*`.
+   *
+   * In `sync` with the rest of the settings, which is right: "do not run SenAnnotate on
+   * our customer's production site" is a fact about the person, not about one machine.
+   */
+  domainRules: string[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -356,6 +369,9 @@ export const DEFAULT_SETTINGS: Settings = {
   toolbarCollapsed: false,
   screenshotDelivery: "path",
   accentColor: DEFAULT_ACCENT,
+  // Off, and an empty list: an upgrade must not change where the extension runs.
+  domainRuleMode: "off",
+  domainRules: [],
 };
 
 export const OUTPUT_DETAIL_OPTIONS: { value: OutputDetailLevel; label: string; hint: string }[] = [
