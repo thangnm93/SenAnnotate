@@ -300,6 +300,35 @@ matters for next time — enumerating page stylesheets from the isolated world f
 for the host, while `CSS.getMatchedStylesForNode` over CDP answers in one call.
 
 
+## [`measure-contrast/`](./measure-contrast/) — 0.8.5
+
+A WCAG contrast ratio on the hover panel and in the report, built almost entirely out of
+what `measure-core/` had already paid for — resolving what colour an element is *actually*
+painted on needs an ancestor walk, and that walk already existed. Its `changelog.md` is
+the one to read for a pattern rather than a fact: **three test expectations were wrong
+while the code was right**, each because a number was guessed instead of derived.
+
+## [`measure-guides/`](./measure-guides/) — 0.8.5
+
+Screen rulers, guides dragged out of them, and a layout grid. Its `context.md` argues the
+one architectural cost in the project: these are the only surfaces that take pointer
+events, and therefore the only ones that make a region of the page unclickable. Its
+`changelog.md` records a check that **stayed green against a deliberately broken build**,
+and the reordering that fixed it — an off-by-default feature has to be tested from the
+*on* state, because the starting state passes for free.
+
+## [`css-editor/`](./css-editor/) — live CSS editing
+
+The release where this stopped being a tool that only reads a page. Mode 5, a card of
+editable declarations, a Changes tab, and a `## CSS changes` section in the report.
+
+Read its `context.md` before proposing `@media` support or pseudo-state forcing: both were
+measured and are blocked on a permission decision, not on effort. Its `changelog.md`
+carries the distinction the feature turns on — `from` is the *computed* value a reader
+needs, `priorInline` is the *inline* value a revert needs, and confusing them looks
+correct on every element that had no inline style.
+
+
 ## [`history/vuetation/`](./history/vuetation/) — the predecessor
 
 Where the three-world architecture, the port map from
@@ -315,6 +344,16 @@ Then `context.md` here for what the 0.2.0 rebrand changed.
 Debugging source resolution: `history/vuetation/context.md` has the four strategies
 ranked best-to-worst, and the note about measuring the installed package rather than
 trusting blog posts — that one cost a detour.
+
+Working on anything that draws on the page: `measure-core/context.md` for why none of it
+touches the MAIN world, then `measure-guides/context.md` for what taking pointer events
+costs. Then `css-editor/context.md`, which is where the project stopped being read-only.
+
+**If you are about to write a test for any of it**, the four changelogs in those folders
+are worth twenty minutes. Between them they record five checks that passed against builds
+that were deliberately broken — the recurring shape is an assertion that is true of the
+bug because it never reaches the state that fails.
+
 
 ## Provenance
 
