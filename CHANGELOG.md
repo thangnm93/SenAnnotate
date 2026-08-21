@@ -10,7 +10,24 @@ matching the tag being released and refuses to publish without one.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.5] — unreleased
+## [0.8.6] — unreleased
+
+[Compare with v0.8.5](https://github.com/thangnm93/SenAnnotate/compare/v0.8.5...v0.8.6)
+
+### Added
+
+- edit an element's CSS on the page and record every override (eab2d73)
+
+### Fixed
+
+- keys typed into the overlay's own fields no longer switch mode (5c50f61)
+
+### Documentation
+
+- index the measurement and CSS-editor design records (79143bc)
+- design record for live CSS editing (8df3699)
+
+## [0.8.5] — 2026-08-21
 
 [Compare with v0.8.4](https://github.com/thangnm93/SenAnnotate/compare/v0.8.4...v0.8.5)
 
