@@ -38,6 +38,7 @@ import {
 } from "./bridge";
 import { captureDraft, resolveElement, viewportBoxes, type Draft } from "./capture";
 import { copyText } from "./clipboard";
+import { pickColour } from "./eyedropper";
 import {
   broadcastFrameState,
   installChildFrame,
@@ -284,6 +285,10 @@ function createTopUi(): void {
 
 const settingsCallbacks = {
   onClose: () => toggleSettings(false),
+  // Handed straight through with nothing in front of it. `EyeDropper` needs the click's
+  // transient activation and an `await` on the way would spend it — the same rule that
+  // makes `copyReport` touch the clipboard before it awaits anything.
+  onPickColour: () => pickColour(),
   onHideUntilRestart: () => hideUntilRestart(),
   onChange: (patch: Partial<Settings>) => {
     const derived: Partial<Settings> = {};

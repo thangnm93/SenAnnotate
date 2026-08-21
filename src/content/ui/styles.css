@@ -1702,6 +1702,34 @@ kbd {
   padding-left: 16px;
 }
 
+/*
+ * The picked colour. Not a setting — a result — so it has no label column and no help
+ * dot, and it is absent until something has been picked.
+ */
+.picked {
+  gap: 8px;
+  align-items: center;
+}
+
+.picked__swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--sa-border);
+  flex: none;
+}
+
+.picked__value {
+  font-family: var(--sa-mono);
+  font-size: 12px;
+  flex: 1;
+}
+
+/* Children of a child — the grid's numbers under the switch that draws them. */
+.setting-row--grandchild {
+  padding-left: 32px;
+}
+
 .setting-row {
   display: flex;
   align-items: center;

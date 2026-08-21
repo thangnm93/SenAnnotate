@@ -1152,11 +1152,66 @@ async function main() {
     await ruled.locator('.settings input[data-setting="showRulers"]').click();
     await ruled.locator('.settings input[data-setting="showGrid"]').click();
     check(
+      "the grid numbers sit under the switch that draws them",
+      await ruled.evaluate(() => {
+        const root = document.querySelector("[data-senannotate-ui]").shadowRoot;
+        const group = [...root.querySelectorAll(".settings__group")].find(
+          (node) => node.textContent === "Measuring",
+        );
+        const labels = [];
+        for (let n = group.nextElementSibling; n && !n.classList.contains("settings__group"); n = n.nextElementSibling) {
+          if (n.getClientRects().length === 0) continue;
+          labels.push(n.querySelector(".setting-row__label span")?.textContent ?? "");
+        }
+        return labels.join(",");
+      }) ===
+        "Measuring tools,Measure distances,Screen rulers and guides,Layout grid,Columns,Gutter,Page margin,Box model on hover,Pick a colour",
+      await ruled.evaluate(() => {
+        const root = document.querySelector("[data-senannotate-ui]").shadowRoot;
+        const group = [...root.querySelectorAll(".settings__group")].find(
+          (node) => node.textContent === "Measuring",
+        );
+        const labels = [];
+        for (let n = group.nextElementSibling; n && !n.classList.contains("settings__group"); n = n.nextElementSibling) {
+          if (n.getClientRects().length === 0) continue;
+          labels.push(n.querySelector(".setting-row__label span")?.textContent ?? "");
+        }
+        return labels.join(",");
+      }),
+    );
+    check(
       "switching the grid on reveals its three numbers",
       (await ruled.locator('.settings input[data-setting="gridColumns"]').isVisible()) &&
         (await ruled.locator('.settings input[data-setting="gridGutter"]').isVisible()) &&
         (await ruled.locator('.settings input[data-setting="gridMargin"]').isVisible()),
     );
+    // --- the colour picker -----------------------------------------------------
+    //
+    // Only the surface is testable. `EyeDropper` opens browser chrome that Playwright
+    // cannot click, and in headless it aborts before drawing — so the pick itself has no
+    // e2e anywhere, which is exactly why `content/eyedropper.ts` is four lines of logic
+    // and everything else lives where it can be checked.
+    check(
+      "the picker is offered once measuring is on",
+      await ruled.locator('.settings [data-action="pick-colour"]').isVisible(),
+    );
+    check(
+      "nothing is shown until something has been picked",
+      (await ruled.locator(".picked:visible").count()) === 0,
+    );
+    // Dismissing the picker must leave the card exactly as it was. Headless aborts the
+    // open immediately, which is the same path a user pressing Escape takes.
+    await ruled.locator('.settings [data-action="pick-colour"]').click();
+    await ruled.waitForTimeout(300);
+    check(
+      "a dismissed pick leaves no result behind",
+      (await ruled.locator(".picked:visible").count()) === 0,
+    );
+    check(
+      "and does not disturb the card",
+      await ruled.locator('.settings input[data-setting="showGrid"]').isVisible(),
+    );
+
     await ruled.keyboard.press("Escape");
     await ruled.waitForTimeout(250);
 
