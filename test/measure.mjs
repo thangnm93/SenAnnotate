@@ -246,5 +246,41 @@ check("a mid grey fails AA as body text", report(mid, white, 14, 400).aa === fal
 check("the same grey passes AA as large text", report(mid, white, 24, 400).aa === true, JSON.stringify(report(mid, white, 24, 400)));
 check("the band is the one where large matters", near(report(mid, white, 14, 400).ratio, 3.45), String(report(mid, white, 14, 400).ratio));
 
+// -----------------------------------------------------------------------------
+// CSS overrides
+// -----------------------------------------------------------------------------
+//
+// The engine writes to real elements, so it needs a DOM. These checks cover the part
+// that is pure: how a list of overrides becomes the report section. The apply/revert
+// round trip is covered in the browser, where an element exists to revert.
+
+const { formatCssChanges } = await load("src/shared/output.ts", "output-css.mjs");
+
+const empty = formatCssChanges([]);
+check("no overrides means no section at all", empty.length === 0, JSON.stringify(empty));
+
+const section = formatCssChanges([
+  {
+    id: "e0",
+    selector: ".actions > button.primary",
+    label: "button.primary",
+    overrides: [
+      { property: "padding", from: "8px 12px", to: "12px 20px", priorInline: "" },
+      { property: "background-color", from: "rgb(37, 99, 235)", to: "rgb(29, 78, 216)", priorInline: "" },
+    ],
+  },
+]).join("\n");
+
+check("the section names the selector, not the friendly label", section.includes("### `.actions > button.primary`"), section);
+check("each line carries both values", section.includes("- `padding`: `8px 12px` \u2192 `12px 20px`"), section);
+check("and the second property too", section.includes("`rgb(37, 99, 235)` \u2192 `rgb(29, 78, 216)`"), section);
+check("the section is headed once", (section.match(/## CSS changes/g) ?? []).length === 1, section);
+
+// An element whose overrides were all reverted must not leave an empty heading behind.
+const reverted = formatCssChanges([
+  { id: "e1", selector: ".gone", label: "div.gone", overrides: [] },
+]);
+check("an element with nothing left is dropped", reverted.length === 0, JSON.stringify(reverted));
+
 console.log(failures ? `\n${failures} failed` : "\nall checks passed");
 process.exit(failures ? 1 : 0);

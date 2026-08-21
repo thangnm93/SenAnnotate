@@ -1105,6 +1105,153 @@ async function main() {
     );
 
     // -------------------------------------------------------------------------
+    // Live CSS editing
+    // -------------------------------------------------------------------------
+    //
+    // Its own fixture, carrying the two cases a revert has to tell apart: an element
+    // whose padding comes from a stylesheet (revert must REMOVE the property) and one
+    // that already had an inline padding (revert must PUT THAT BACK). Getting the second
+    // wrong leaves the page in a state it was never in, and looks correct on the first.
+    const edit = await context.newPage();
+    await edit.goto(`${base}/css-edit.html`);
+    await edit.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
+    await edit.locator(".tool--brand").click();
+
+    const padding = (id) =>
+      edit.evaluate((target) => {
+        const node = document.getElementById(target);
+        return `${getComputedStyle(node).padding} | ${node.style.padding || "-"}`;
+      }, id);
+
+    check(
+      "mode 5 is absent until the editor is switched on",
+      (await edit.locator('.tool[aria-label^="Edit CSS"]:visible').count()) === 0,
+    );
+    await edit.keyboard.press("5");
+    await edit.waitForTimeout(80);
+    check(
+      "the 5 key does nothing while it is off",
+      !((await edit.locator(".toolbar-hint").textContent()) ?? "").includes("edit its CSS"),
+      `hint read "${(await edit.locator(".toolbar-hint").textContent())?.trim() ?? ""}"`,
+    );
+
+    await edit.locator('.tool[aria-label^="Settings"]').click();
+    await edit.locator('.settings input[data-setting="cssEditor"]').click();
+    await edit.keyboard.press("Escape");
+    await edit.waitForTimeout(200);
+    check(
+      "the hint advertises mode 5 once it exists",
+      ((await edit.locator(".toolbar-hint").textContent()) ?? "").includes("5 edit"),
+      `hint read "${(await edit.locator(".toolbar-hint").textContent())?.trim() ?? ""}"`,
+    );
+
+    await edit.keyboard.press("5");
+    const plainBox = await edit.locator("#plain").boundingBox();
+    await edit.mouse.click(plainBox.x + 40, plainBox.y + 10);
+    await edit.locator(".css-card").waitFor({ state: "visible", timeout: 5_000 });
+    check(
+      "clicking an element opens the card on it",
+      ((await edit.locator(".css-card .card__title").textContent()) ?? "").trim() === "div#plain",
+      (await edit.locator(".css-card .card__title").textContent()) ?? "",
+    );
+    check("and the page is untouched so far", (await padding("plain")) === "8px 12px | -", await padding("plain"));
+
+    const field = edit.locator('.css-card input[data-property="padding"]');
+    await field.fill("24px 30px");
+    await field.press("Enter");
+    await edit.waitForTimeout(200);
+    check("editing applies immediately", (await padding("plain")) === "24px 30px | 24px 30px", await padding("plain"));
+    check(
+      "the Changes tab counts it",
+      ((await edit.locator('.css-card__tab[data-tab="changes"]').textContent()) ?? "").trim() === "Changes (1)",
+      (await edit.locator('.css-card__tab[data-tab="changes"]').textContent()) ?? "",
+    );
+
+    await edit.locator('.css-card__tab[data-tab="changes"]').click();
+    await edit.waitForTimeout(120);
+    check(
+      "the change records both values",
+      ((await edit.locator(".css-card__change").first().textContent()) ?? "").replace(/\s+/g, "") ===
+        "padding8px 12px→24px 30px".replace(/\s+/g, ""),
+      (await edit.locator(".css-card__change").first().textContent()) ?? "",
+    );
+
+    await edit.locator('.css-card [data-action="revert-all"]').click();
+    await edit.waitForTimeout(200);
+    check(
+      "reverting an element that had no inline style removes the property",
+      (await padding("plain")) === "8px 12px | -",
+      await padding("plain"),
+    );
+
+    // The case that looks the same and is not.
+    await edit.locator('.css-card__tab[data-tab="styles"]').click();
+    const inlinedBox = await edit.locator("#inlined").boundingBox();
+    await edit.mouse.click(inlinedBox.x + 40, inlinedBox.y + 10);
+    await edit.waitForTimeout(150);
+    const field2 = edit.locator('.css-card input[data-property="padding"]');
+    await field2.fill("40px");
+    await field2.press("Enter");
+    await edit.waitForTimeout(200);
+    check("it applies there too", (await padding("inlined")) === "40px | 40px", await padding("inlined"));
+
+    await edit.locator('.css-card__tab[data-tab="changes"]').click();
+    await edit.locator('.css-card [data-action="revert-all"]').click();
+    await edit.waitForTimeout(200);
+    check(
+      "reverting an element that HAD an inline style puts that value back",
+      (await padding("inlined")) === "4px 6px | 4px 6px",
+      await padding("inlined"),
+    );
+
+    // Into the report. Needs a note, because the report is built from the panel.
+    await edit.keyboard.press("Escape");
+    await edit.waitForTimeout(150);
+    await edit.keyboard.press("5");
+    await edit.mouse.click(plainBox.x + 40, plainBox.y + 10);
+    await edit.waitForTimeout(150);
+    const field3 = edit.locator('.css-card input[data-property="padding"]');
+    await field3.fill("18px");
+    await field3.press("Enter");
+    await edit.waitForTimeout(150);
+    await edit.keyboard.press("Escape");
+    await edit.waitForTimeout(150);
+    await edit.keyboard.press("1");
+    await edit.mouse.click(plainBox.x + 40, plainBox.y + 10);
+    await edit.locator(".composer").waitFor({ state: "visible", timeout: 5_000 });
+    await edit.locator(".composer__input").fill("padding was too tight");
+    await edit.locator(".composer .button--primary").click();
+    await edit.locator(".composer").waitFor({ state: "detached", timeout: 5_000 });
+    await edit.locator('.tool[aria-label^="Annotations"]').click();
+    await edit.locator(".panel").waitFor({ state: "visible", timeout: 5_000 });
+    await edit.locator(".panel .button--primary").click();
+    const editReport = await edit.evaluate(() => navigator.clipboard.readText());
+    check(
+      "the report carries the CSS changes section",
+      editReport.includes("## CSS changes") &&
+        editReport.includes("- `padding`: `8px 12px` \u2192 `18px`"),
+      editReport.slice(-400),
+    );
+
+    // Switching the editor off must close the card and leave the mode — but must NOT
+    // undo the edits, which are the user's work rather than the mode's.
+    await edit.locator('.tool[aria-label^="Annotations"]').click();
+    await edit.locator('.tool[aria-label^="Settings"]').click();
+    await edit.locator('.settings input[data-setting="cssEditor"]').click();
+    await edit.keyboard.press("Escape");
+    await edit.waitForTimeout(250);
+    check(
+      "switching the editor off takes mode 5 with it",
+      (await edit.locator('.tool[aria-label^="Edit CSS"]:visible').count()) === 0 &&
+        (await edit.locator(".css-card:visible").count()) === 0,
+    );
+    check(
+      "but leaves the edits alone — they are the user's, not the mode's",
+      (await padding("plain")) === "18px | 18px",
+      await padding("plain"),
+    );
+
+    // -------------------------------------------------------------------------
     // Rulers, guides and the layout grid
     // -------------------------------------------------------------------------
     //

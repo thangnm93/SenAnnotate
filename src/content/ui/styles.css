@@ -652,6 +652,163 @@ button {
   z-index: 2;
 }
 
+/* ---------------------------------------------------------------------------
+ * CSS editor card
+ *
+ * Monospace throughout, and laid out as `name value` pairs in a fixed column, because
+ * everything in it is CSS and the reader is about to go and write more of it.
+ * ------------------------------------------------------------------------- */
+
+.css-card {
+  bottom: 72px;
+  right: 20px;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 92px);
+  animation: vt-rise 0.16s ease;
+}
+
+.toolbar-dock[data-inspecting="true"] ~ .css-card {
+  bottom: 104px;
+}
+
+.toolbar-dock[data-floating="true"] ~ .css-card[data-anchored="true"] {
+  bottom: auto;
+  right: auto;
+}
+
+.css-card[data-leaving="true"] {
+  animation: vt-fall 0.14s ease forwards;
+  pointer-events: none;
+}
+
+.css-card__tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--sa-border);
+}
+
+.css-card__tab {
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--sa-fg-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.css-card__tab[aria-pressed="true"] {
+  color: var(--sa-fg);
+  border-bottom-color: var(--sa-accent);
+}
+
+.css-card__body {
+  padding: 6px 0;
+  overflow-y: auto;
+  font-family: var(--sa-mono);
+  font-size: 11px;
+}
+
+.css-card__row,
+.css-card__change {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 10px;
+}
+
+/* Fixed, so every value starts at the same x and the column can be scanned. */
+.css-card__name {
+  min-width: 104px;
+  color: var(--sa-fg-muted);
+}
+
+.css-card__value {
+  flex: 1;
+  min-width: 0;
+  padding: 1px 4px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--sa-fg);
+  font: inherit;
+}
+
+.css-card__value:hover {
+  border-color: var(--sa-border);
+}
+
+.css-card__value:focus {
+  outline: none;
+  border-color: var(--sa-accent);
+  background: var(--sa-bg);
+}
+
+/* An overridden declaration is the one thing in this list that is not the page's. */
+.css-card__row--overridden .css-card__name {
+  color: var(--sa-accent);
+  font-weight: 700;
+}
+
+.css-card__row--new {
+  margin-top: 4px;
+  padding-top: 5px;
+  border-top: 1px solid var(--sa-border);
+}
+
+.css-card__row--new .css-card__name {
+  flex: none;
+  padding: 1px 4px;
+  border: 1px solid var(--sa-border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--sa-fg);
+  font: inherit;
+}
+
+.css-card__group {
+  padding: 8px 10px 2px;
+  color: var(--sa-fg-muted);
+  font-size: 10px;
+  font-weight: 700;
+  word-break: break-all;
+}
+
+.css-card__from {
+  color: var(--sa-fg-muted);
+  text-decoration: line-through;
+}
+
+.css-card__arrow {
+  color: var(--sa-fg-muted);
+}
+
+.css-card__to {
+  color: var(--sa-accent);
+}
+
+.css-card__revert {
+  flex: none;
+}
+
+.css-card__empty {
+  margin: 0;
+  padding: 14px 10px;
+  color: var(--sa-fg-muted);
+  font-family: var(--sa-sans, inherit);
+}
+
+.css-card__actions {
+  display: flex;
+  gap: 6px;
+  padding: 10px;
+  border-top: 1px solid var(--sa-border);
+  margin-top: 6px;
+}
+
 /*
  * The layout grid. Fixed to the viewport, full height, behind everything else this
  * overlay draws — it is a backdrop to check alignment against, not a thing to read.

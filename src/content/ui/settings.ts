@@ -196,6 +196,13 @@ export class SettingsCard {
         ),
         this.hideUntilRestartRow(),
 
+        this.group("Editing"),
+        this.toggle(
+          "cssEditor",
+          "Live CSS editor",
+          "Adds mode 5: click an element and change its CSS on the page, with a Changes tab that records every override so you can copy or revert it. This is the switch that lets this extension write to a page instead of only reading one — off by default for that reason.",
+        ),
+
         this.group("Measuring"),
         this.toggle(
           "measureTools",

@@ -176,6 +176,28 @@ painted is a gradient or an image. A ratio against a guess is worse than no rati
 
 ---
 
+## CSS changes
+
+Present whenever anything was overridden in mode 5, as a section of its own rather than
+attached to a note — an override is not a comment about an element, it is an instruction
+about one, and it exists whether or not anybody wrote a sentence beside it.
+
+```markdown
+## CSS changes
+
+### `.actions > button.primary`
+
+- `padding`: `8px 12px` → `12px 20px`
+```
+
+The heading is the **selector**, not the friendly label: this is the one part of the
+report meant to be acted on mechanically, and `button.primary` is not something you can
+paste into a stylesheet. `from` is the value the page computed before you touched it, not
+the previous edit — someone following the report needs the stylesheet's value, not your
+intermediate step.
+
+---
+
 ## Frames
 
 An element inside an iframe carries a `**Frame:**` line above `**Location:**`, because

@@ -32,6 +32,7 @@ settings row — click the page once and they come back. See [[Troubleshooting]]
 | <kbd>2</kbd> | Select text |
 | <kbd>3</kbd> | Drag across elements |
 | <kbd>4</kbd> | Measure distances — only when *Measuring tools* is on in Settings |
+| <kbd>5</kbd> | Edit CSS — needs *Live CSS editor* on in Settings |
 
 Mode keys need inspect mode on. <kbd>H</kbd> does not, which is the one asymmetry.
 
