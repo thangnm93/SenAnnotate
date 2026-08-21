@@ -1165,7 +1165,7 @@ async function main() {
         }
         return labels.join(",");
       }) ===
-        "Measuring tools,Measure distances,Screen rulers and guides,Layout grid,Columns,Gutter,Page margin,Box model on hover,Pick a colour",
+        "Measuring tools,Measure distances,Screen rulers and guides,Layout grid,Columns,Gutter,Page margin,Box model on hover",
       await ruled.evaluate(() => {
         const root = document.querySelector("[data-senannotate-ui]").shadowRoot;
         const group = [...root.querySelectorAll(".settings__group")].find(
@@ -1185,35 +1185,26 @@ async function main() {
         (await ruled.locator('.settings input[data-setting="gridGutter"]').isVisible()) &&
         (await ruled.locator('.settings input[data-setting="gridMargin"]').isVisible()),
     );
+    await ruled.keyboard.press("Escape");
+    await ruled.waitForTimeout(250);
+
     // --- the colour picker -----------------------------------------------------
     //
     // Only the surface is testable. `EyeDropper` opens browser chrome that Playwright
-    // cannot click, and in headless it aborts before drawing — so the pick itself has no
-    // e2e anywhere, which is exactly why `content/eyedropper.ts` is four lines of logic
-    // and everything else lives where it can be checked.
+    // cannot click, and in headless it aborts before drawing — which is exactly why
+    // `content/eyedropper.ts` is four lines and everything else lives where it can be
+    // checked. Headless taking the abort path is the same path Escape takes.
     check(
-      "the picker is offered once measuring is on",
-      await ruled.locator('.settings [data-action="pick-colour"]').isVisible(),
+      "the picker is on the pill once measuring is on",
+      await ruled.locator('.tool[aria-label^="Pick a colour"]').isVisible(),
     );
+    await ruled.locator('.tool[aria-label^="Pick a colour"]').click();
+    await ruled.waitForTimeout(400);
     check(
-      "nothing is shown until something has been picked",
-      (await ruled.locator(".picked:visible").count()) === 0,
+      "a dismissed pick says nothing",
+      (await ruled.locator(".toast").count()) === 0,
+      String(await ruled.locator(".toast").count()),
     );
-    // Dismissing the picker must leave the card exactly as it was. Headless aborts the
-    // open immediately, which is the same path a user pressing Escape takes.
-    await ruled.locator('.settings [data-action="pick-colour"]').click();
-    await ruled.waitForTimeout(300);
-    check(
-      "a dismissed pick leaves no result behind",
-      (await ruled.locator(".picked:visible").count()) === 0,
-    );
-    check(
-      "and does not disturb the card",
-      await ruled.locator('.settings input[data-setting="showGrid"]').isVisible(),
-    );
-
-    await ruled.keyboard.press("Escape");
-    await ruled.waitForTimeout(250);
 
     const on = await drawn();
     check("both rulers are drawn", on.rulers === 2, JSON.stringify(on));
@@ -1294,6 +1285,10 @@ async function main() {
     await ruled.locator('.settings input[data-setting="measureTools"]').click();
     await ruled.keyboard.press("Escape");
     await ruled.waitForTimeout(250);
+    check(
+      "the master takes the picker off the pill too",
+      (await ruled.locator('.tool[aria-label^="Pick a colour"]:visible').count()) === 0,
+    );
     check(
       "the master takes the rulers and the grid with it, both still switched on",
       JSON.stringify(await drawn()) ===

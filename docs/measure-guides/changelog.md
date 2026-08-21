@@ -122,3 +122,28 @@ same rule that already makes copying a report touch the clipboard before it awai
   `Measuring tools · Measure distances · Screen rulers and guides · Layout grid ·
   Columns · Gutter · Page margin · Box model on hover · Pick a colour`, at indents
   0 / 16 / 16 / 16 / 32 / 32 / 32 / 16 / 16 px.
+
+## The picker moved to the toolbar
+
+Asked for immediately after it shipped in Settings: put it on the pill.
+
+The trade was named when the two options were offered — a fourth non-mode button on a
+toolbar that docks over someone else's page, against opening Settings for every pick —
+and having used it, opening Settings each time lost. Worth recording as a pattern rather
+than a one-off: **of the four UI placements decided by asking during this work, two were
+reversed after the thing was in someone's hands.** A described cost and a felt one are
+not the same, and the cheap way to tell them apart is to ship the smaller one first.
+
+Mechanically the move is small. What changed with it:
+
+- **The result no longer has a home**, so it copies instead. `copyText` falls back to
+  `execCommand` when `navigator.clipboard` refuses, which it may: awaiting the picker has
+  already spent the click's transient activation, and that is the same rule that makes
+  copying a report touch the clipboard before it awaits anything. The toast distinguishes
+  `#2563eb copied` from a bare `#2563eb`, so a failed copy is visible rather than silent.
+- **`ToolbarState.colourPicker` is separate from `measureMode`.** The picker belongs to
+  the measuring master, not to the distance mode — switching mode 4 off must not take it
+  away. One field would have coupled them, and the coupling would have looked like a bug
+  in whichever one you noticed second.
+- The e2e moved with it, and gained a check that the master takes the picker off the pill
+  too. The button order was read off the built extension rather than assumed.

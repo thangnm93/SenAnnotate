@@ -28,12 +28,6 @@ import { dismissCard, h, icon } from "./dom";
 import { attachTooltip, hideTooltip } from "./tooltip";
 
 export interface SettingsCallbacks {
-  /**
-   * Open the colour picker. Must reach `EyeDropper.open()` without an `await` in front
-   * of it — the API needs the click's transient activation, and awaiting spends it.
-   * Returns the hex, or `null` when the picker was dismissed.
-   */
-  onPickColour(): Promise<string | null>;
   onClose(): void;
   onChange(patch: Partial<Settings>): void;
   /** Hide the whole overlay in this tab until the tab is closed. Not a stored setting. */
@@ -64,10 +58,6 @@ export class SettingsCard {
   private readonly numbers = new Map<keyof Settings, HTMLInputElement>();
   /** Shown only while `showGrid` is on — three numbers for a grid nobody is drawing. */
   private readonly gridRows: HTMLElement[];
-  /** The picker's row and its result line, hidden with the rest when the master is off. */
-  private readonly pickedSwatch: HTMLElement;
-  private readonly pickedValue: HTMLElement;
-  private readonly pickedRow: HTMLElement;
   /**
    * The two rows that only exist under `measureTools`, kept so `render` can take them
    * away together.
@@ -108,20 +98,6 @@ export class SettingsCard {
     ];
 
 
-    this.pickedSwatch = h("span", { class: "picked__swatch" });
-    this.pickedValue = h("span", { class: "picked__value", text: "" });
-    this.pickedRow = h(
-      "div",
-      { class: "setting-row setting-row--child picked", style: { display: "none" } },
-      this.pickedSwatch,
-      this.pickedValue,
-      h("button", {
-        class: "button button--ghost picked__copy",
-        text: "Copy",
-        on: { click: () => void this.copyPicked() },
-      }),
-    );
-
     this.measureRows = [
       this.toggle(
         "measureDistances",
@@ -147,19 +123,6 @@ export class SettingsCard {
         "Box model on hover",
         "Shades padding and margin on whatever the pointer is over, and puts the border-box size on a badge. Mode 4 shows them regardless of this.",
       ),
-      this.row(
-        "Pick a colour",
-        "Samples any pixel on the screen. Hovering already reports an element's text and background colours — this is for the case that cannot: a gradient, an image or a canvas, where the background is reported as `image` rather than guessed at.",
-        h("button", {
-          class: "button button--ghost",
-          text: "Pick",
-          attrs: { "data-action": "pick-colour" },
-          // No `await` before `onPickColour` reaches the API: the click's transient
-          // activation is what authorises the picker, and awaiting anything spends it.
-          on: { click: () => void this.pick() },
-        }),
-      ),
-      this.pickedRow,
     ];
     for (const row of this.measureRows) row.classList.add("setting-row--child");
     // A second indent level, because these three are children of a child.
@@ -415,26 +378,6 @@ export class SettingsCard {
 
   // ---------------------------------------------------------------------------
 
-  /** The picker is an action, so its result lives here rather than in `Settings`. */
-  private async pick(): Promise<void> {
-    const hex = await this.callbacks.onPickColour();
-    if (!hex) return;
-    this.pickedRow.style.display = "";
-    this.pickedSwatch.style.background = hex;
-    this.pickedValue.textContent = hex;
-  }
-
-  private async copyPicked(): Promise<void> {
-    const hex = this.pickedValue.textContent;
-    if (!hex) return;
-    try {
-      await navigator.clipboard.writeText(hex);
-    } catch {
-      // The card is ours and focused, so this should not fail — but a clipboard denial
-      // is not worth an error card over a six-character string still on screen.
-    }
-  }
-
   render(settings: Settings): void {
     for (const [key, select] of this.selects) select.value = String(settings[key]);
     for (const [key, input] of this.switches) input.checked = Boolean(settings[key]);
@@ -443,11 +386,6 @@ export class SettingsCard {
 
     for (const row of this.measureRows) {
       row.style.display = settings.measureTools ? "" : "none";
-    }
-    // The result line is the one row here that is not a setting: it appears when
-    // something has been picked and stays until the card is closed.
-    if (!settings.measureTools || !this.pickedValue.textContent) {
-      this.pickedRow.style.display = "none";
     }
     // The three grid numbers need both: a grid nobody is drawing has no columns to set,
     // and neither does a measuring surface that is switched off entirely.

@@ -189,19 +189,6 @@ measuring blind. The switch is for the other three modes, where the bands are ex
 information rather than the point. That is also why the two are separate switches — you
 can read spacing all day without ever wanting a fourth mode button.
 
-### Pick a colour
-
-Samples any pixel on the screen and shows the hex, with a **Copy** button.
-
-Hovering already reports an element's text colour and the real background behind it, so
-this is not the usual way to get a colour out of a page. It is for the case the other one
-cannot answer: where the background is a **gradient, an image or a canvas**, the hover
-panel reports `image` and refuses to guess, because one swatch cannot honestly stand for
-one. This is how you get a number there.
-
-It lives in Settings rather than on the toolbar because it is an occasional action, and
-the toolbar is docked over someone else's page.
-
 ---
 
 ## Appearance

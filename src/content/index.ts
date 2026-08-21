@@ -268,6 +268,7 @@ function createTopUi(): void {
     onToggleFreeze: () => toggleFreeze(),
     onTogglePanel: () => togglePanel(),
     onToggleSettings: () => toggleSettings(),
+    onPickColour: () => void pickAndCopy(),
     onToggleCollapse: () => toggleCollapsed(),
     onMove: (position) => {
       // Saved on drop rather than per frame — a drag would otherwise write sixty
@@ -285,10 +286,6 @@ function createTopUi(): void {
 
 const settingsCallbacks = {
   onClose: () => toggleSettings(false),
-  // Handed straight through with nothing in front of it. `EyeDropper` needs the click's
-  // transient activation and an `await` on the way would spend it — the same rule that
-  // makes `copyReport` touch the clipboard before it awaits anything.
-  onPickColour: () => pickColour(),
   onHideUntilRestart: () => hideUntilRestart(),
   onChange: (patch: Partial<Settings>) => {
     const derived: Partial<Settings> = {};
@@ -371,6 +368,25 @@ function enforceMeasureSetting(): void {
   broadcastFrameState(active, mode);
 }
 
+/**
+ * Pick a colour, put it on the clipboard, and say so.
+ *
+ * The hex is copied rather than shown-and-left, because a six-character string in a
+ * toast that vanishes is a string you have to pick again. `copyText` falls back to
+ * `execCommand` when `navigator.clipboard` refuses — which it may here, since awaiting
+ * the picker has already spent the click's transient activation.
+ *
+ * A dismissed picker returns `null` and says nothing. Pressing Escape out of a colour
+ * picker is a decision, not a failure, and a toast for it would be noise.
+ */
+async function pickAndCopy(): Promise<void> {
+  const hex = await pickColour();
+  if (!hex) return;
+
+  const copied = await copyText(hex, ui.shadow);
+  ui.toast(copied ? `${hex} copied` : hex);
+}
+
 function render(): void {
   toolbar.update({
     active,
@@ -379,6 +395,7 @@ function render(): void {
     panelOpen,
     settingsOpen: !!settingsCard,
     measureMode: measureModeAvailable(),
+    colourPicker: settings.measureTools,
     collapsed: settings.toolbarCollapsed,
     count: annotations.length,
     page,
