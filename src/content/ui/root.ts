@@ -43,6 +43,11 @@ export function createUiRoot(): UiRoot {
   host.style.setProperty("inset", "0", "important");
   host.style.setProperty("pointer-events", "none", "important");
   host.style.setProperty("z-index", "2147483647", "important");
+  // Not paranoia — measured. A page rule matching the host beats every `:host` rule, and
+  // this host is fixed, full-viewport and at the top of the z order: one page rule giving
+  // it a background paints an opaque sheet over the entire site. daisyUI's
+  // `:root, [data-theme] { background-color: … }` did exactly that.
+  host.style.setProperty("background", "transparent", "important");
 
   const shadow = host.attachShadow({ mode: "open" });
 
@@ -238,7 +243,8 @@ export function createUiRoot(): UiRoot {
 
   const applyTheme = () => {
     const dark = preference === "dark" || (preference === "auto" && darkQuery.matches);
-    host.setAttribute("data-theme", dark ? "dark" : "light");
+    // Namespaced: a bare `data-theme` is what daisyUI and many themed sites select on.
+    host.setAttribute("data-sa-theme", dark ? "dark" : "light");
   };
 
   darkQuery.addEventListener("change", applyTheme);

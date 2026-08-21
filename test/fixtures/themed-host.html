@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <title>SenAnnotate fixture — page CSS reaching our shadow host</title>
+    <!--
+      A page rule that matches our host element out-ranks every `:host` rule in the
+      shadow tree — the outer tree wins the cascade on a shadow host. daisyUI ships
+      exactly the rule below, so any site using it painted our fixed, full-viewport,
+      top-of-the-z-order host opaque and blanked itself (goaffpro.com/signup).
+
+      `div` is here for the same class of collision without the `[data-theme]` hook.
+    -->
+    <style>
+      :root,
+      [data-theme] {
+        background-color: rgb(255, 0, 0);
+        color: rgb(255, 0, 0);
+        font-family: "Comic Sans MS", cursive;
+      }
+      div {
+        background-color: rgb(0, 0, 255);
+      }
+      body {
+        margin: 0;
+        padding: 32px;
+        font: 14px/1.5 system-ui, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="headline">Themed page</h1>
+    <button class="cta">Click me</button>
+  </body>
+</html>

@@ -2088,6 +2088,48 @@ async function main() {
     );
 
     // -------------------------------------------------------------------------
+    // A page whose CSS reaches our shadow host
+    // -------------------------------------------------------------------------
+    // Page declarations beat every `:host` rule, so a site styling `[data-theme]` or
+    // `div` — daisyUI does the first — used to paint our fixed, full-viewport host
+    // opaque and hide the whole site behind it.
+    const themed = await context.newPage();
+    await themed.goto(`${base}/themed-host.html`);
+    await themed.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
+
+    const hostPaint = await themed.evaluate(() => {
+      const host = document.querySelector("[data-senannotate-ui]");
+      const shadowText = getComputedStyle(host.shadowRoot.querySelector(".layer"));
+      return {
+        background: getComputedStyle(host).backgroundColor,
+        color: shadowText.color,
+        font: shadowText.fontFamily,
+      };
+    });
+    check(
+      "page CSS cannot paint our host over the site",
+      hostPaint.background === "rgba(0, 0, 0, 0)",
+      hostPaint.background,
+    );
+    check(
+      "page CSS cannot recolour the overlay through the host",
+      hostPaint.color !== "rgb(255, 0, 0)" && !hostPaint.font.includes("Comic Sans"),
+      `${hostPaint.color} / ${hostPaint.font}`,
+    );
+
+    // The page is still annotatable with all that in its stylesheet.
+    await themed.locator(".tool--brand").click();
+    await themed.locator(".cta").click();
+    await themed.locator(".composer").waitFor({ state: "visible", timeout: 5_000 });
+    const themedComposer = (await themed.locator(".composer").textContent()) ?? "";
+    check(
+      "a themed page still annotates",
+      themedComposer.includes('button "Click me"'),
+      themedComposer.slice(0, 200),
+    );
+    await themed.keyboard.press("Escape");
+
+    // -------------------------------------------------------------------------
     // React, Svelte, Angular
     // -------------------------------------------------------------------------
     //

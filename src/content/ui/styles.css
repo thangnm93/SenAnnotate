@@ -38,7 +38,7 @@
   -webkit-font-smoothing: antialiased;
 }
 
-:host([data-theme="dark"]) {
+:host([data-sa-theme="dark"]) {
   --sa-bg: rgba(22, 27, 34, 0.88);
   --sa-bg-solid: #161b22;
   --sa-bg-sunken: #0d1117;
@@ -46,6 +46,26 @@
   --sa-fg-muted: #8b949e;
   --sa-border: rgba(240, 246, 252, 0.14);
   --sa-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/*
+ * Declarations from the page that match our host element out-rank every `:host` rule —
+ * the outer tree wins the cascade on a shadow host — so `all: initial` above is a
+ * best-effort, not a guarantee. daisyUI's base rule is the case that proved it:
+ * `:root, [data-theme] { background-color: ...; color: ... }` matched the host and
+ * painted the whole viewport opaque (goaffpro.com/signup went blank). The attribute is
+ * namespaced now, but a page rule as broad as `div` would land the same way, so the
+ * inherited properties are re-declared here, on the layers *inside* the shadow tree,
+ * which page CSS has no way to reach. The host's own background is pinned inline in
+ * `root.ts` for the same reason.
+ */
+.layer,
+.markers {
+  font-family: var(--sa-font);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--sa-fg);
+  -webkit-font-smoothing: antialiased;
 }
 
 * {
@@ -393,7 +413,7 @@ button {
   margin-right: 4px;
 }
 
-:host([data-theme="dark"]) .stack-badge[data-warn="true"] {
+:host([data-sa-theme="dark"]) .stack-badge[data-warn="true"] {
   color: #fbbf24;
 }
 
@@ -893,7 +913,7 @@ button {
   font-weight: 600;
 }
 
-:host([data-theme="dark"]) .meta-row__value--accent {
+:host([data-sa-theme="dark"]) .meta-row__value--accent {
   color: var(--sa-accent);
 }
 
@@ -1065,7 +1085,7 @@ kbd {
   font-weight: 600;
 }
 
-:host([data-theme="dark"]) .capture-summary {
+:host([data-sa-theme="dark"]) .capture-summary {
   color: var(--sa-accent);
 }
 
@@ -1127,7 +1147,7 @@ kbd {
   text-overflow: ellipsis;
 }
 
-:host([data-theme="dark"]) .entry__source {
+:host([data-sa-theme="dark"]) .entry__source {
   color: var(--sa-accent);
 }
 

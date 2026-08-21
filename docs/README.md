@@ -287,6 +287,19 @@ instead of accent-derived ones, and why `**Gap:**` prints a detail level earlier
 `**Box:**`. First of three planned measurement releases; `plan.md` has the ordering.
 
 
+## [`host-style-leak/`](./host-style-leak/) — unreleased
+
+Why goaffpro.com/signup went blank the moment the overlay loaded: page CSS cannot reach
+*into* a shadow tree, but it can style the **host**, and there outer-tree declarations beat
+`:host` rules — so daisyUI's `:root, [data-theme] { background-color: … }` matched the
+`data-theme` we set for our own dark mode and painted our full-viewport, top-of-the-z-order
+host opaque white over the site. Its `context.md` explains the asymmetry and why
+`:host { all: initial }` was never the guarantee its comment claimed; its `changelog.md`
+records the two false leads (freeze CSS, the `console.error` patch) and the one that
+matters for next time — enumerating page stylesheets from the isolated world finds no match
+for the host, while `CSS.getMatchedStylesForNode` over CDP answers in one call.
+
+
 ## [`history/vuetation/`](./history/vuetation/) — the predecessor
 
 Where the three-world architecture, the port map from
