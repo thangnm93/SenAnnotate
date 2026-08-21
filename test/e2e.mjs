@@ -1105,6 +1105,208 @@ async function main() {
     );
 
     // -------------------------------------------------------------------------
+    // Rulers, guides and the layout grid
+    // -------------------------------------------------------------------------
+    //
+    // Its own fixture, and a tall one: guides are stored in document coordinates and the
+    // only way to show that is to scroll.
+    const ruled = await context.newPage();
+    await ruled.goto(`${base}/rulers.html`);
+    await ruled.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
+    await ruled.locator(".tool--brand").click();
+
+    const drawn = async () =>
+      ruled.evaluate(() => {
+        const root = document.querySelector("[data-senannotate-ui]").shadowRoot;
+        // `getClientRects()`, not the node's own `display`: the grid hides by hiding its
+        // container, so every band underneath still computes to `display: block` and a
+        // check that reads the band alone reports twelve of them on a blank screen. It
+        // did, until this line changed.
+        const visible = (selector) =>
+          [...root.querySelectorAll(selector)].filter((node) => node.getClientRects().length > 0);
+        return {
+          rulers: visible(".ruler").length,
+          bands: visible(".grid-overlay__band").length,
+          guides: visible(".guide").length,
+          labelsY: visible(".ruler--left .ruler__label")
+            .slice(0, 2)
+            .map((node) => node.textContent),
+        };
+      });
+
+    // The off state is the one every user meets first, and the one that decides whether
+    // any region of the page stops taking clicks.
+    check(
+      "nothing is drawn while the master is off",
+      JSON.stringify(await drawn()) === JSON.stringify({ rulers: 0, bands: 0, guides: 0, labelsY: [] }),
+      JSON.stringify(await drawn()),
+    );
+
+    await ruled.locator('.tool[aria-label^="Settings"]').click();
+    await ruled.locator(".settings").waitFor({ state: "visible", timeout: 5_000 });
+    await ruled.locator('.settings input[data-setting="measureTools"]').click();
+    check(
+      "the grid numbers stay hidden until the grid is on",
+      !(await ruled.locator('.settings input[data-setting="gridColumns"]').isVisible()),
+    );
+    await ruled.locator('.settings input[data-setting="showRulers"]').click();
+    await ruled.locator('.settings input[data-setting="showGrid"]').click();
+    check(
+      "the grid numbers sit under the switch that draws them",
+      await ruled.evaluate(() => {
+        const root = document.querySelector("[data-senannotate-ui]").shadowRoot;
+        const group = [...root.querySelectorAll(".settings__group")].find(
+          (node) => node.textContent === "Measuring",
+        );
+        const labels = [];
+        for (let n = group.nextElementSibling; n && !n.classList.contains("settings__group"); n = n.nextElementSibling) {
+          if (n.getClientRects().length === 0) continue;
+          labels.push(n.querySelector(".setting-row__label span")?.textContent ?? "");
+        }
+        return labels.join(",");
+      }) ===
+        "Measuring tools,Measure distances,Screen rulers and guides,Layout grid,Columns,Gutter,Page margin,Box model on hover",
+      await ruled.evaluate(() => {
+        const root = document.querySelector("[data-senannotate-ui]").shadowRoot;
+        const group = [...root.querySelectorAll(".settings__group")].find(
+          (node) => node.textContent === "Measuring",
+        );
+        const labels = [];
+        for (let n = group.nextElementSibling; n && !n.classList.contains("settings__group"); n = n.nextElementSibling) {
+          if (n.getClientRects().length === 0) continue;
+          labels.push(n.querySelector(".setting-row__label span")?.textContent ?? "");
+        }
+        return labels.join(",");
+      }),
+    );
+    check(
+      "switching the grid on reveals its three numbers",
+      (await ruled.locator('.settings input[data-setting="gridColumns"]').isVisible()) &&
+        (await ruled.locator('.settings input[data-setting="gridGutter"]').isVisible()) &&
+        (await ruled.locator('.settings input[data-setting="gridMargin"]').isVisible()),
+    );
+    await ruled.keyboard.press("Escape");
+    await ruled.waitForTimeout(250);
+
+    // --- the colour picker -----------------------------------------------------
+    //
+    // Only the surface is testable. `EyeDropper` opens browser chrome that Playwright
+    // cannot click, and in headless it aborts before drawing — which is exactly why
+    // `content/eyedropper.ts` is four lines and everything else lives where it can be
+    // checked. Headless taking the abort path is the same path Escape takes.
+    check(
+      "the picker is on the pill once measuring is on",
+      await ruled.locator('.tool[aria-label^="Pick a colour"]').isVisible(),
+    );
+    await ruled.locator('.tool[aria-label^="Pick a colour"]').click();
+    await ruled.waitForTimeout(400);
+    check(
+      "a dismissed pick says nothing",
+      (await ruled.locator(".toast").count()) === 0,
+      String(await ruled.locator(".toast").count()),
+    );
+
+    const on = await drawn();
+    check("both rulers are drawn", on.rulers === 2, JSON.stringify(on));
+    check("the grid draws one band per column", on.bands === 12, JSON.stringify(on));
+    check(
+      "the strips take the pointer, which is what makes them draggable",
+      (await ruled.evaluate(() => {
+        const root = document.querySelector("[data-senannotate-ui]").shadowRoot;
+        return getComputedStyle(root.querySelector(".ruler--top")).pointerEvents;
+      })) === "auto",
+    );
+
+    // Drag a vertical guide out of the left strip.
+    await ruled.mouse.move(10, 300);
+    await ruled.mouse.down();
+    await ruled.mouse.move(240, 300, { steps: 8 });
+    await ruled.mouse.up();
+    await ruled.waitForTimeout(200);
+    check("dragging out of a ruler creates a guide", (await drawn()).guides === 1);
+    check(
+      "the guide is stored in document coordinates, in this tab only",
+      (await ruled.evaluate(() =>
+        window.sessionStorage.getItem("senannotate:guides:/rulers.html"),
+      )) === '[{"id":"g0","axis":"x","at":240}]',
+      (await ruled.evaluate(() =>
+        window.sessionStorage.getItem("senannotate:guides:/rulers.html"),
+      )) ?? "null",
+    );
+
+    // Scroll: the vertical ruler must relabel, and the guide must stay where it was put.
+    await ruled.evaluate(() => window.scrollTo(0, 120));
+    await ruled.waitForTimeout(250);
+    const scrolled = await drawn();
+    check(
+      "the vertical ruler labels document coordinates, not viewport ones",
+      scrolled.labelsY[0] === "200",
+      JSON.stringify(scrolled.labelsY),
+    );
+    check("the guide survives the scroll", scrolled.guides === 1, JSON.stringify(scrolled));
+    check(
+      "the vertical label fits inside its 20px strip",
+      await ruled.evaluate(() => {
+        const root = document.querySelector("[data-senannotate-ui]").shadowRoot;
+        const strip = root.querySelector(".ruler--left").getBoundingClientRect();
+        const label = root.querySelector(".ruler--left .ruler__label")?.getBoundingClientRect();
+        return Boolean(label) && label.left >= strip.left - 0.5 && label.right <= strip.right + 0.5;
+      }),
+    );
+
+    // Drag it back onto the ruler to throw it away.
+    await ruled.evaluate(() => window.scrollTo(0, 0));
+    await ruled.waitForTimeout(150);
+    await ruled.mouse.move(243, 300);
+    await ruled.mouse.down();
+    await ruled.mouse.move(6, 300, { steps: 8 });
+    await ruled.mouse.up();
+    await ruled.waitForTimeout(200);
+    check("dragging a guide back onto the ruler removes it", (await drawn()).guides === 0);
+
+    // Changing a number redraws without a reload.
+    await ruled.locator('.tool[aria-label^="Settings"]').click();
+    await ruled.locator('.settings input[data-setting="gridColumns"]').fill("6");
+    await ruled.locator('.settings input[data-setting="gridColumns"]').press("Enter");
+    await ruled.waitForTimeout(250);
+    check("changing the column count redraws the grid", (await drawn()).bands === 6, JSON.stringify(await drawn()));
+
+    // The master has to take the rulers with it while their own switch is still on.
+    // This is the state that matters: rulers cost the page two dead bands, and a user
+    // who switches measuring off and keeps them is left unable to click their own page
+    // with nothing on screen explaining why.
+    //
+    // Asserting it needed this exact order. Turning the rulers off first — the tidy
+    // way — leaves `showRulers` false, and then the check passes whether or not the
+    // master is wired in at all. Verified by deleting `settings.measureTools &&` from
+    // the gate: the suite stayed green until this block was reordered.
+    await ruled.locator('.settings input[data-setting="gridColumns"]').fill("12");
+    await ruled.locator('.settings input[data-setting="gridColumns"]').press("Enter");
+    await ruled.locator('.settings input[data-setting="measureTools"]').click();
+    await ruled.keyboard.press("Escape");
+    await ruled.waitForTimeout(250);
+    check(
+      "the master takes the picker off the pill too",
+      (await ruled.locator('.tool[aria-label^="Pick a colour"]:visible').count()) === 0,
+    );
+    check(
+      "the master takes the rulers and the grid with it, both still switched on",
+      JSON.stringify(await drawn()) ===
+        JSON.stringify({ rulers: 0, bands: 0, guides: 0, labelsY: [] }),
+      JSON.stringify(await drawn()),
+    );
+
+    // Now put their own switches back, so `chrome.storage.sync` reaches every later page
+    // in the state it started in.
+    await ruled.locator('.tool[aria-label^="Settings"]').click();
+    await ruled.locator('.settings input[data-setting="measureTools"]').click();
+    await ruled.locator('.settings input[data-setting="showGrid"]').click();
+    await ruled.locator('.settings input[data-setting="showRulers"]').click();
+    await ruled.locator('.settings input[data-setting="measureTools"]').click();
+    await ruled.keyboard.press("Escape");
+    await ruled.waitForTimeout(200);
+
+    // -------------------------------------------------------------------------
     // ⌘/Ctrl+drag — the same box without leaving point mode
     // -------------------------------------------------------------------------
     //

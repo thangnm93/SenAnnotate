@@ -168,6 +168,8 @@ const PATHS: Record<string, string> = {
   download: "M12 4v11M8 11l4 4 4-4M5 19h14",
   // A double-headed arrow: this button measures the distance between two things.
   arrows: "M3 12h18M3 12l4-4M3 12l4 4M21 12l-4-4M21 12l-4 4",
+  // An eyedropper: barrel on the diagonal, bulb at the top right.
+  eyedropper: "M4 20h3l9.5-9.5M4 20v-3l9.5-9.5M16.5 10.5l3-3a2.1 2.1 0 00-3-3l-3 3M13.5 7.5l3 3",
 };
 
 export function icon(name: keyof typeof PATHS | string, size = 16): SVGSVGElement {

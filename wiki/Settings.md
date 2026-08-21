@@ -149,6 +149,35 @@ See [[Toolbar and Modes]].
 Switching it off while you are standing in mode 4 drops you back to mode 1. A mode that
 outlives its own button is a mode you can neither see nor leave.
 
+### Screen rulers and guides
+
+Off by default. On, rulers run down the top and left edges, labelled in **document**
+coordinates — so the numbers still mean something after you scroll. Drag out of a ruler
+to place a guide, drag a guide to move it, drag it back onto the ruler to throw it away.
+The coordinate follows the pointer while you drag.
+
+**This is the one setting that takes part of the page away from the page.** A guide has
+to receive the pointer to be draggable, and anything that receives the pointer cannot be
+clicked through — so the two 20px strips and each guide are holes the page never sees a
+click in. In mode 4 that matters: a guide lying across a button means that button cannot
+be anchored while the guide is there. It is off by default for that reason alone, and
+switching *Measuring tools* off takes it with it.
+
+Guides live in the tab's session storage, keyed on the path. They survive a reload and
+disappear when the tab closes — a guide is a pencil line on one page, not a preference.
+
+### Layout grid
+
+Off by default. Draws **Columns** bands across the viewport, inset by **Page margin** on
+each side with **Gutter** between them. The three numbers appear only while the grid is
+on.
+
+Viewport-relative, deliberately — a page grid is a property of the window the design was
+drawn for, so it does not scroll. That is the opposite of a guide, which is aligned to
+content and therefore does.
+
+Nothing here reaches the report.
+
 ### Box model on hover
 
 Off by default. On, every hover — in any mode — shades the element's padding and margin,

@@ -17,6 +17,12 @@ export interface ToolbarState {
    * has no business knowing that the switch it obeys is really two.
    */
   measureMode: boolean;
+  /**
+   * Whether the colour picker sits on the pill. Separate from `measureMode`: the picker
+   * belongs to the measuring master, not to the distance mode, so switching mode 4 off
+   * must not take it away.
+   */
+  colourPicker: boolean;
   /** Shrunk to a single handle, so the pill stops covering the page. */
   collapsed: boolean;
   count: number;
@@ -29,6 +35,7 @@ export interface ToolbarCallbacks {
   onToggleFreeze(): void;
   onTogglePanel(): void;
   onToggleSettings(): void;
+  onPickColour(): void;
   onToggleCollapse(): void;
   /** Fired once, on drop — not per frame. The drag itself needs no persistence. */
   onMove(position: { x: number; y: number }): void;
@@ -101,6 +108,7 @@ export class Toolbar {
   private readonly modeButtons = new Map<InspectMode, HTMLButtonElement>();
   private readonly modeGroup: HTMLElement;
   private readonly freezeButton: HTMLButtonElement;
+  private readonly pickerButton: HTMLButtonElement;
   private readonly panelButton: HTMLButtonElement;
   private readonly settingsButton: HTMLButtonElement;
   private readonly collapseButton: HTMLButtonElement;
@@ -179,6 +187,18 @@ export class Toolbar {
       icon("snowflake"),
     );
 
+    this.pickerButton = h(
+      "button",
+      {
+        class: "tool tool--picker",
+        attrs: { "aria-label": "Pick a colour" },
+        // Straight through, nothing awaited in front of it: `EyeDropper` needs the
+        // click's transient activation and an `await` on the way would spend it.
+        on: { click: () => callbacks.onPickColour() },
+      },
+      icon("eyedropper"),
+    );
+
     this.countBadge = h("span", { class: "count", text: "0", style: { display: "none" } });
     this.panelButton = h(
       "button",
@@ -235,6 +255,7 @@ export class Toolbar {
       this.modeGroup,
       h("span", { class: "divider" }),
       this.freezeButton,
+      this.pickerButton,
       this.panelButton,
       this.settingsButton,
       this.collapseButton,
@@ -253,6 +274,7 @@ export class Toolbar {
       this.brandButton,
       ...this.modeButtons.values(),
       this.freezeButton,
+      this.pickerButton,
       this.panelButton,
       this.settingsButton,
       this.collapseButton,
@@ -508,6 +530,8 @@ export class Toolbar {
     // map is what `onModeChange` and the e2e locators both go through.
     const measureModeButton = this.modeButtons.get("measure");
     if (measureModeButton) measureModeButton.style.display = state.measureMode ? "" : "none";
+
+    this.pickerButton.style.display = state.colourPicker ? "" : "none";
 
     this.modeHint = hintFor(state.mode, state.measureMode);
     this.hintVisible = state.active;

@@ -48,6 +48,7 @@ Mode keys need inspect mode on. <kbd>H</kbd> does not, which is the one asymmetr
 | <kbd>Enter</kbd> | Annotate the pick set as it stands |
 | <kbd>Esc</kbd> | Drop the pick set, or the measuring anchor, staying in inspect mode |
 | **Drag the pill** | Move the toolbar — remembered per page |
+| **Drag from a ruler** | Place a guide — drag it back onto the ruler to remove it. Needs *Screen rulers and guides* on |
 
 **On macOS use <kbd>⌘</kbd>.** <kbd>Ctrl</kbd>+click there is a right-click.
 

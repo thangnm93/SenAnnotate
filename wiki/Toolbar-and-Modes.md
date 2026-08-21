@@ -19,6 +19,7 @@ in the corner, next to the page they describe.
 | ⛶ | **Drag across elements** | Mode 3 — the marquee. | <kbd>3</kbd> |
 | ⇔ | **Measure distances** | Mode 4 — the gap between two elements. **Only present when *Measuring tools* and *Measure distances* are both on in Settings; the master is off by default.** | <kbd>4</kbd> |
 | ❄ | **Freeze animations** | Parks `requestAnimationFrame` and `setTimeout` in the page. | <kbd>F</kbd> |
+| ⬥ | **Pick a colour** | Samples any pixel on screen and copies the hex. Only present when *Measuring tools* is on. | — |
 | ☰ ③ | **Annotations** | Opens the panel. The badge is the count on this page. | <kbd>A</kbd> |
 | ⚙ | **Settings** | Opens the settings card. | — |
 | » | **Collapse toolbar** | Collapses to a dot. | <kbd>H</kbd> |
@@ -229,3 +230,20 @@ Two things worth knowing:
 - **A `(scaled)` badge** means the element is drawn at a different size than it is laid
   out at — a CSS `transform`, or page zoom. The size shown is what is on screen; the
   padding and margin figures are the layout ones, and the two genuinely differ.
+
+---
+
+## Picking a colour
+
+The ⬥ button samples any pixel on the screen, copies the hex to the clipboard and says so
+in a toast. Dismissing the picker says nothing — pressing Escape out of it is a decision,
+not a failure.
+
+Hovering already reports an element's text colour and the real background behind it, so
+this is not the usual way to get a colour out of a page. It is for the case the other one
+cannot answer: where the background is a **gradient, an image or a canvas**, the hover
+panel reports `image` and refuses to guess, because one swatch cannot honestly stand for
+one. This is how you get a number there.
+
+The hex is copied rather than left on screen because a six-character string in a toast
+that vanishes is a string you have to go and pick again.
