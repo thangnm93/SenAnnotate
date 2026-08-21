@@ -74,3 +74,60 @@ not on the page.
 - `npm test` — **354/354** e2e, **9/9** upgrade, **57/57** unit.
 - Driven by hand on the built extension across both revert cases before any e2e existed.
 - The restoring revert was verified by breaking it and watching the check fail.
+
+## The bug the CSS card exposed was two releases old
+
+Reported: with the CSS card open, digits do not reach its fields — they switch mode
+instead.
+
+**Root cause, measured rather than guessed:** `event.target` is **retargeted to the
+shadow host** for anything inside our shadow root. The keydown guard tested
+`target.tagName` against `input|textarea|select`, and for every field this extension owns
+that tag is `DIV`. The guard has never worked on our own UI.
+
+```
+target=DIV[host]   composedPath()[0]=INPUT
+```
+
+So it was not a CSS-card bug. The same hole swallowed digits typed into the grid's
+**Columns** field, added two releases earlier in `feature/measure-guides` — typing `3`
+there switched to mode 3 behind the open card, silently. Nobody noticed because a column
+count is usually set once and the mode change is invisible while a card covers the page.
+
+Fixed at the source with `composedPath()[0]`, which is the element actually focused on
+both sides of the boundary. Both fields now have a regression check; breaking the fix
+fails them.
+
+**Then the fix was too wide.** Guarding every form control meant that after clicking a
+checkbox in Settings — which keeps focus — the mode keys went dead for the rest of the
+session. A checkbox takes no text, so a digit pressed on one is a mode key. `isTextEntry`
+now excludes checkbox, radio, button, colour, range and file, and keeps `select`, where
+letters and arrows genuinely navigate.
+
+## Arrow keys, and the repaint that made them useless once
+
+<kbd>↑</kbd>/<kbd>↓</kbd> step the number the caret is in; Shift by ten, Alt by a tenth.
+`nudge()` is pure and unit-tested across fifteen cases — the caret choosing between the
+two numbers of `8px 12px`, a single channel of `rgb(37, 99, 235)`, decimals preserved,
+a fine step on an integer gaining a place, and no-number values left to the browser.
+
+**The interesting part is why one press was not enough to test.** Every edit repaints the
+card, and the repaint replaces the input being typed in — so the first Up worked and the
+second did nothing, because the field it had focus in no longer existed. The card now
+records the focused property and caret before `replaceChildren` and restores them after,
+with `takeFocus` rather than `focus` for the reason that helper's own comment gives.
+
+The check that catches it is **three presses in a row**. One press passes against the
+bug. Verified by removing the restore: three assertions fail, all reporting the value
+after the first step.
+
+That is the same shape as the ruler check in `docs/measure-guides/changelog.md` — an
+assertion that is true of the broken build because it never reaches the state that
+breaks. Worth naming as a pattern: **if a fix is about continuing, the test has to
+continue.**
+
+## Verification
+
+- `npm test` — **362/362** e2e, **9/9** upgrade, **72/72** unit.
+- Both fixes verified by breaking them: `composedPath` (1 failure) and the focus restore
+  (3 failures).

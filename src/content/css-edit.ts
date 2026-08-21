@@ -127,3 +127,53 @@ export function overridesFor(element: Element): CssOverride[] {
   const found = id ? registry.get(id) : undefined;
   return found ? found.entry.overrides : [];
 }
+
+// -----------------------------------------------------------------------------
+// Arrow-key nudging
+// -----------------------------------------------------------------------------
+
+/** Every number in a value, with where it sits, so the caret can pick one. */
+const NUMBER = /-?\d*\.?\d+/g;
+
+/**
+ * Step one number inside a CSS value, chosen by where the caret is.
+ *
+ * The caret matters because most values have more than one: `8px 12px` has two and
+ * `rgb(37, 99, 235)` has three, and nudging all of them — or always the first — is not
+ * what anyone means by pressing Up. The token under the caret wins; failing that, the
+ * one that ends nearest before it, which is what you get after typing a number and
+ * reaching for the arrow key.
+ *
+ * Decimal places are preserved, because `1.5rem` stepping to `2.5` and then to `3` reads
+ * as the field losing precision rather than gaining a unit.
+ *
+ * Returns `null` when there is no number to step — `auto`, `inherit`, a bare colour name.
+ * The caller leaves the key to the browser in that case rather than swallowing it.
+ */
+export function nudge(
+  value: string,
+  caret: number,
+  delta: number,
+): { value: string; caret: number } | null {
+  const matches = [...value.matchAll(NUMBER)];
+  if (!matches.length) return null;
+
+  const under = matches.find(
+    (match) => caret >= match.index! && caret <= match.index! + match[0].length,
+  );
+  const before = [...matches].reverse().find((match) => match.index! + match[0].length <= caret);
+  const target = under ?? before ?? matches[0];
+
+  const decimals = (target[0].split(".")[1] ?? "").length;
+  const stepped = (Number.parseFloat(target[0]) + delta).toFixed(
+    // A 0.1 step on an integer has to gain a decimal place, or Up does nothing visible.
+    Math.max(decimals, delta % 1 === 0 ? 0 : 1),
+  );
+
+  const start = target.index!;
+  const end = start + target[0].length;
+  return {
+    value: value.slice(0, start) + stepped + value.slice(end),
+    caret: start + stepped.length,
+  };
+}

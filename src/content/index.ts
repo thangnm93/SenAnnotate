@@ -593,6 +593,26 @@ function saveGuides(guides: Guide[]): void {
   }
 }
 
+/**
+ * Would this element have taken the keystroke as text?
+ *
+ * Narrower than "is it a form control", and the difference matters. A checkbox holds
+ * focus after you click it, and swallowing every key while it does would make the mode
+ * keys feel dead for the rest of the session — you clicked a switch, you did not start
+ * typing. A checkbox takes no text, so a digit pressed on one is a mode key.
+ *
+ * `select` stays in: letters jump between its options and arrows move the selection.
+ */
+function isTextEntry(node: HTMLElement | null | undefined): boolean {
+  if (!node) return false;
+  if (node.isContentEditable) return true;
+  if (node.tagName === "TEXTAREA" || node.tagName === "SELECT") return true;
+  if (node.tagName !== "INPUT") return false;
+  return !/^(checkbox|radio|button|submit|reset|color|range|file|image)$/i.test(
+    (node as HTMLInputElement).type,
+  );
+}
+
 /** Whether this tab was asked to hide the overlay for the rest of its session. */
 function isHiddenThisSession(): boolean {
   try {
@@ -2171,10 +2191,16 @@ function installTopFrame(): void {
 
     if (composer) return;
 
-    // Never hijack a key the user is typing into the page.
-    const target = keyboard.target as HTMLElement | null;
-    if (target?.isContentEditable) return;
-    if (target && /^(input|textarea|select)$/i.test(target.tagName)) return;
+    // Never hijack a key the user is typing — into the page, or into our own UI.
+    //
+    // `event.target` is **retargeted to the shadow host** for anything inside our shadow
+    // root, so it reports `DIV` and every guard below silently misses: typing `15px`
+    // into a CSS value switched to mode 1 and then mode 5, and typing a column count
+    // into Settings switched modes behind the card. `composedPath()[0]` is the element
+    // actually focused, on both sides of the boundary.
+    const target = (keyboard.composedPath()[0] as HTMLElement | undefined) ??
+      (keyboard.target as HTMLElement | null);
+    if (isTextEntry(target)) return;
     if (keyboard.metaKey || keyboard.ctrlKey || keyboard.altKey) return;
 
     // Above the `active` guard on purpose: the pill covers the bottom-right corner

@@ -272,6 +272,12 @@ The overrides also reach the report, as a `## CSS changes` section of its own �
 override list is the most directly actionable thing this tool can hand an agent, because
 it is the instruction with the guessing already removed.
 
+**Arrow keys step numbers.** With the caret in a value, <kbd>↑</kbd> and <kbd>↓</kbd>
+move the number it is sitting in by 1, <kbd>Shift</kbd> by 10, <kbd>Alt</kbd> by 0.1. The
+caret is what decides *which* number: in `8px 12px` it is the one you are next to, and in
+`rgb(37, 99, 235)` it is that channel alone. Each press applies straight to the page, so
+holding <kbd>↑</kbd> is a way to find a value by eye.
+
 Three things worth knowing:
 
 - **Reverting restores, it does not clear.** An element that already carried an inline

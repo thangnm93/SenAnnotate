@@ -1156,7 +1156,26 @@ async function main() {
     );
     check("and the page is untouched so far", (await padding("plain")) === "8px 12px | -", await padding("plain"));
 
+    // Typing a digit into our own field must not reach the mode keys. `event.target` is
+    // retargeted to the shadow host for anything inside the overlay, so the guard used to
+    // see `DIV` and miss every input we own — typing `15px` switched to mode 1, then
+    // mode 5, and the repaint threw the keystrokes away.
     const field = edit.locator('.css-card input[data-property="padding"]');
+    await field.click();
+    await field.fill("");
+    await edit.keyboard.type("15px");
+    await edit.waitForTimeout(120);
+    check(
+      "digits typed into a CSS value stay in the field",
+      (await field.inputValue()) === "15px",
+      await field.inputValue(),
+    );
+    check(
+      "and do not switch mode behind the card",
+      ((await edit.locator(".toolbar-hint").textContent()) ?? "").includes("edit its CSS"),
+      `hint read "${(await edit.locator(".toolbar-hint").textContent())?.trim() ?? ""}"`,
+    );
+
     await field.fill("24px 30px");
     await field.press("Enter");
     await edit.waitForTimeout(200);
@@ -1176,6 +1195,50 @@ async function main() {
       (await edit.locator(".css-card__change").first().textContent()) ?? "",
     );
 
+    // --- arrow stepping ---------------------------------------------------------
+    //
+    // The caret decides which number moves, which is the only thing that makes this
+    // usable on a shorthand. And the field is replaced on every edit, so three presses
+    // in a row is the check that matters: it fails if focus is not carried across the
+    // repaint, and one press alone would pass against that bug.
+    await edit.locator('.css-card__tab[data-tab="styles"]').click();
+    const stepper = edit.locator('.css-card input[data-property="padding"]');
+    await stepper.click();
+    await edit.keyboard.press("End");
+    await edit.keyboard.press("ArrowUp");
+    await edit.waitForTimeout(100);
+    check("Up steps the number at the caret", (await stepper.inputValue()) === "24px 31px", await stepper.inputValue());
+    check(
+      "and applies it to the page as it goes",
+      (await padding("plain")).startsWith("24px 31px"),
+      await padding("plain"),
+    );
+
+    await edit.keyboard.press("ArrowUp");
+    await edit.keyboard.press("ArrowUp");
+    await edit.waitForTimeout(100);
+    check(
+      "focus survives the repaint, so holding Up keeps stepping",
+      (await stepper.inputValue()) === "24px 33px",
+      await stepper.inputValue(),
+    );
+
+    await edit.keyboard.down("Shift");
+    await edit.keyboard.press("ArrowUp");
+    await edit.keyboard.up("Shift");
+    await edit.waitForTimeout(100);
+    check("Shift steps by ten", (await stepper.inputValue()) === "24px 43px", await stepper.inputValue());
+
+    await edit.keyboard.press("Home");
+    await edit.keyboard.press("ArrowDown");
+    await edit.waitForTimeout(100);
+    check(
+      "the caret picks which number moves",
+      (await stepper.inputValue()) === "23px 43px",
+      await stepper.inputValue(),
+    );
+
+    await edit.locator('.css-card__tab[data-tab="changes"]').click();
     await edit.locator('.css-card [data-action="revert-all"]').click();
     await edit.waitForTimeout(200);
     check(
@@ -1413,10 +1476,20 @@ async function main() {
 
     // Changing a number redraws without a reload.
     await ruled.locator('.tool[aria-label^="Settings"]').click();
-    await ruled.locator('.settings input[data-setting="gridColumns"]').fill("6");
-    await ruled.locator('.settings input[data-setting="gridColumns"]').press("Enter");
+    // Typed, not filled: a digit typed here used to reach the mode keys as well as the
+    // field, because the retargeted event looked like it came from a plain `DIV`.
+    const columns = ruled.locator('.settings input[data-setting="gridColumns"]');
+    await columns.click();
+    await columns.fill("");
+    await ruled.keyboard.type("6");
+    await ruled.keyboard.press("Enter");
     await ruled.waitForTimeout(250);
     check("changing the column count redraws the grid", (await drawn()).bands === 6, JSON.stringify(await drawn()));
+    check(
+      "and typing it did not switch mode behind the card",
+      ((await ruled.locator(".toolbar-hint").textContent()) ?? "").startsWith("Click an element"),
+      `hint read "${(await ruled.locator(".toolbar-hint").textContent())?.trim() ?? ""}"`,
+    );
 
     // The master has to take the rulers with it while their own switch is still on.
     // This is the state that matters: rulers cost the page two dead bands, and a user

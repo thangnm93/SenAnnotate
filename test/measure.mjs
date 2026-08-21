@@ -282,5 +282,36 @@ const reverted = formatCssChanges([
 ]);
 check("an element with nothing left is dropped", reverted.length === 0, JSON.stringify(reverted));
 
+// --- nudging a number inside a CSS value ----------------------------------------
+const { nudge } = await load("src/content/css-edit.ts", "cssedit.mjs");
+const n = (value, caret, delta) => nudge(value, caret, delta)?.value ?? null;
+
+check("a single value steps", n("24px", 2, 1) === "25px", String(n("24px", 2, 1)));
+check("and steps down", n("24px", 2, -1) === "23px", String(n("24px", 2, -1)));
+check("a value with no number is left alone", n("auto", 2, 1) === null, String(n("auto", 2, 1)));
+
+// The caret is what makes this usable on a shorthand: `8px 12px` has two numbers and
+// nudging both, or always the first, is not what pressing Up means.
+check("the caret picks the first of two", n("8px 12px", 1, 1) === "9px 12px", String(n("8px 12px", 1, 1)));
+check("the caret picks the second of two", n("8px 12px", 5, 1) === "8px 13px", String(n("8px 12px", 5, 1)));
+check("a caret past everything takes the last", n("8px 12px", 8, 1) === "8px 13px", String(n("8px 12px", 8, 1)));
+check("a caret at 0 takes the first", n("8px 12px", 0, 1) === "9px 12px", String(n("8px 12px", 0, 1)));
+
+// Three numbers, none of them lengths.
+check("a colour channel steps on its own", n("rgb(37, 99, 235)", 9, 1) === "rgb(37, 100, 235)", String(n("rgb(37, 99, 235)", 9, 1)));
+
+// Precision is preserved, and gained when the step needs it.
+check("decimals survive", n("1.5rem", 2, 1) === "2.5rem", String(n("1.5rem", 2, 1)));
+check("a fine step keeps one place", n("1.5rem", 2, 0.1) === "1.6rem", String(n("1.5rem", 2, 0.1)));
+check("a fine step on an integer gains a place", n("24px", 2, 0.1) === "24.1px", String(n("24px", 2, 0.1)));
+check("a coarse step stays whole", n("24px", 2, 10) === "34px", String(n("24px", 2, 10)));
+check("negatives step", n("-4px", 2, 1) === "-3px", String(n("-4px", 2, 1)));
+check("through zero", n("0", 1, -1) === "-1", String(n("0", 1, -1)));
+
+// The caret comes back so the field can be re-focused where the user left it.
+// "8px 13px" — index 6 is the character after "13", which is where a caret belongs
+// when you have just stepped that number. Counted out, not guessed: the first guess was 7.
+check("the caret lands after the new number", nudge("8px 12px", 5, 1).caret === 6, String(nudge("8px 12px", 5, 1).caret));
+
 console.log(failures ? `\n${failures} failed` : "\nall checks passed");
 process.exit(failures ? 1 : 0);

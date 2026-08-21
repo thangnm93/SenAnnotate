@@ -15,8 +15,9 @@
 // callbacks; `content/css-edit.ts` is the only thing that touches the page.
 // =============================================================================
 
+import { nudge } from "../css-edit";
 import type { CssOverride } from "../../shared/types";
-import { dismissCard, h, icon } from "./dom";
+import { dismissCard, h, icon, takeFocus } from "./dom";
 
 export interface CssCardCallbacks {
   onClose(): void;
@@ -130,7 +131,24 @@ export class CssCard {
     const count = this.all.reduce((sum, each) => sum + each.overrides.length, 0);
     this.changesTab.textContent = count ? `Changes (${count})` : "Changes";
 
+    // Every edit repaints, and a repaint replaces the input the user is typing in. Note
+    // where the caret was and put it back, or holding Up steps once and then does
+    // nothing — the field it was stepping no longer exists.
+    const root = this.element.getRootNode() as ShadowRoot;
+    const focused = root.activeElement as HTMLInputElement | null;
+    const property = focused?.dataset?.property;
+    const caret = focused?.selectionStart ?? null;
+
     this.body.replaceChildren(...(this.tab === "styles" ? this.styleRows() : this.changeRows()));
+
+    if (!property) return;
+    const restored = this.body.querySelector<HTMLInputElement>(`input[data-property="${property}"]`);
+    if (!restored) return;
+    // `takeFocus` rather than `focus`, for the reason its own comment gives: a focus trap
+    // on the page restores focus when it sees a `focusout` with a `relatedTarget` inside
+    // the document, and blurring first is what stops it noticing.
+    takeFocus(restored);
+    if (caret !== null) restored.setSelectionRange(caret, caret);
   }
 
   private styleRows(): HTMLElement[] {
@@ -177,6 +195,7 @@ export class CssCard {
           if (next) this.callbacks.onEdit(property, next);
           else this.callbacks.onRevert(property);
         },
+        keydown: (event) => this.arrowStep(event, property, input),
       },
     });
     input.value = value;
@@ -199,6 +218,31 @@ export class CssCard {
       );
     }
     return row;
+  }
+
+  /**
+   * Up and Down step the number the caret is in; Shift by ten, Alt by a tenth.
+   *
+   * Applied on every press rather than on commit, because the point of holding Up is
+   * watching the page move. `preventDefault` stops the caret jumping to the end of the
+   * field, which is what an unhandled Up does in a text input — and the caret is what
+   * decides *which* number `8px 12px` steps next time.
+   *
+   * A value with no number in it is left to the browser: swallowing Up on `auto` would
+   * make the field feel broken for no gain.
+   */
+  private arrowStep(event: KeyboardEvent, property: string, input: HTMLInputElement): void {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+
+    const size = event.shiftKey ? 10 : event.altKey ? 0.1 : 1;
+    const delta = event.key === "ArrowUp" ? size : -size;
+    const stepped = nudge(input.value, input.selectionStart ?? input.value.length, delta);
+    if (!stepped) return;
+
+    event.preventDefault();
+    input.value = stepped.value;
+    input.setSelectionRange(stepped.caret, stepped.caret);
+    this.callbacks.onEdit(property, stepped.value.trim());
   }
 
   private changeRows(): HTMLElement[] {
