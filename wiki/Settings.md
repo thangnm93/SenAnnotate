@@ -121,6 +121,19 @@ To get it back: close the tab, or open the page in a new one.
 
 ---
 
+## Editing
+
+### Live CSS editor
+
+**Off by default.** On, it adds mode 5: click an element and change its CSS on the page,
+with a Changes tab recording every override so you can copy or revert. See
+[[Toolbar and Modes]].
+
+This is the switch that turns a tool which reads a page into one that changes it — which
+is why it is off, and why it is a switch at all rather than simply present.
+
+---
+
 ## Measuring
 
 Three switches: a master, and two indented under it that only appear once it is on.

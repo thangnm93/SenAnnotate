@@ -18,6 +18,7 @@ in the corner, next to the page they describe.
 | T | **Select text** | Mode 2. | <kbd>2</kbd> |
 | ⛶ | **Drag across elements** | Mode 3 — the marquee. | <kbd>3</kbd> |
 | ⇔ | **Measure distances** | Mode 4 — the gap between two elements. **Only present when *Measuring tools* and *Measure distances* are both on in Settings; the master is off by default.** | <kbd>4</kbd> |
+| ✎ | **Edit CSS** | Mode 5 — change an element's CSS on the page. **Only present when *Live CSS editor* is on in Settings; off by default.** | <kbd>5</kbd> |
 | ❄ | **Freeze animations** | Parks `requestAnimationFrame` and `setTimeout` in the page. | <kbd>F</kbd> |
 | ⬥ | **Pick a colour** | Samples any pixel on screen and copies the hex. Only present when *Measuring tools* is on. | — |
 | ☰ ③ | **Annotations** | Opens the panel. The badge is the count on this page. | <kbd>A</kbd> |
@@ -247,3 +248,46 @@ one. This is how you get a number there.
 
 The hex is copied rather than left on screen because a six-character string in a toast
 that vanishes is a string you have to go and pick again.
+
+---
+
+## Mode 5 — editing CSS
+
+**Off by default**, and the switch that matters: it is the one that lets this extension
+*write* to a page rather than only read one. Turn on *Live CSS editor* in Settings, press
+<kbd>5</kbd>, and click an element.
+
+The card has two tabs.
+
+**Styles** lists the properties people actually change, each with its current computed
+value, each editable. Type a value and it applies immediately. An overridden property is
+marked, with a ↺ to put it back. The last row takes any property name you type, for
+everything not on the list.
+
+**Changes** lists every override on the page, grouped by element, as `was → is`. **Copy
+CSS** puts the whole thing on the clipboard in the same shape the report uses; **Revert
+all** undoes everything.
+
+The overrides also reach the report, as a `## CSS changes` section of its own — an
+override list is the most directly actionable thing this tool can hand an agent, because
+it is the instruction with the guessing already removed.
+
+**Arrow keys step numbers.** With the caret in a value, <kbd>↑</kbd> and <kbd>↓</kbd>
+move the number it is sitting in by 1, <kbd>Shift</kbd> by 10, <kbd>Alt</kbd> by 0.1. The
+caret is what decides *which* number: in `8px 12px` it is the one you are next to, and in
+`rgb(37, 99, 235)` it is that channel alone. Each press applies straight to the page, so
+holding <kbd>↑</kbd> is a way to find a value by eye.
+
+Three things worth knowing:
+
+- **Reverting restores, it does not clear.** An element that already carried an inline
+  style gets that value back, not a missing property.
+- **A framework re-render wipes an override.** The change is an inline style and the
+  re-render replaces the node. The Changes tab keeps the record so you can re-apply;
+  nothing re-applies it for you. DevTools has the same hole.
+- **Switching the editor off does not undo your edits.** They are your work, not the
+  mode's. Use *Revert all* for that.
+
+`@media` editing and pseudo-state forcing are **not** here. Forcing `:hover` needs the
+Chrome DevTools Protocol behind the `debugger` permission, and the CSSOM workaround
+cannot read stylesheets served from another origin at all — which is most sites.

@@ -1105,6 +1105,216 @@ async function main() {
     );
 
     // -------------------------------------------------------------------------
+    // Live CSS editing
+    // -------------------------------------------------------------------------
+    //
+    // Its own fixture, carrying the two cases a revert has to tell apart: an element
+    // whose padding comes from a stylesheet (revert must REMOVE the property) and one
+    // that already had an inline padding (revert must PUT THAT BACK). Getting the second
+    // wrong leaves the page in a state it was never in, and looks correct on the first.
+    const edit = await context.newPage();
+    await edit.goto(`${base}/css-edit.html`);
+    await edit.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
+    await edit.locator(".tool--brand").click();
+
+    const padding = (id) =>
+      edit.evaluate((target) => {
+        const node = document.getElementById(target);
+        return `${getComputedStyle(node).padding} | ${node.style.padding || "-"}`;
+      }, id);
+
+    check(
+      "mode 5 is absent until the editor is switched on",
+      (await edit.locator('.tool[aria-label^="Edit CSS"]:visible').count()) === 0,
+    );
+    await edit.keyboard.press("5");
+    await edit.waitForTimeout(80);
+    check(
+      "the 5 key does nothing while it is off",
+      !((await edit.locator(".toolbar-hint").textContent()) ?? "").includes("edit its CSS"),
+      `hint read "${(await edit.locator(".toolbar-hint").textContent())?.trim() ?? ""}"`,
+    );
+
+    await edit.locator('.tool[aria-label^="Settings"]').click();
+    await edit.locator('.settings input[data-setting="cssEditor"]').click();
+    await edit.keyboard.press("Escape");
+    await edit.waitForTimeout(200);
+    check(
+      "the hint advertises mode 5 once it exists",
+      ((await edit.locator(".toolbar-hint").textContent()) ?? "").includes("5 edit"),
+      `hint read "${(await edit.locator(".toolbar-hint").textContent())?.trim() ?? ""}"`,
+    );
+
+    await edit.keyboard.press("5");
+    const plainBox = await edit.locator("#plain").boundingBox();
+    await edit.mouse.click(plainBox.x + 40, plainBox.y + 10);
+    await edit.locator(".css-card").waitFor({ state: "visible", timeout: 5_000 });
+    check(
+      "clicking an element opens the card on it",
+      ((await edit.locator(".css-card .card__title").textContent()) ?? "").trim() === "div#plain",
+      (await edit.locator(".css-card .card__title").textContent()) ?? "",
+    );
+    check("and the page is untouched so far", (await padding("plain")) === "8px 12px | -", await padding("plain"));
+
+    // Typing a digit into our own field must not reach the mode keys. `event.target` is
+    // retargeted to the shadow host for anything inside the overlay, so the guard used to
+    // see `DIV` and miss every input we own — typing `15px` switched to mode 1, then
+    // mode 5, and the repaint threw the keystrokes away.
+    const field = edit.locator('.css-card input[data-property="padding"]');
+    await field.click();
+    await field.fill("");
+    await edit.keyboard.type("15px");
+    await edit.waitForTimeout(120);
+    check(
+      "digits typed into a CSS value stay in the field",
+      (await field.inputValue()) === "15px",
+      await field.inputValue(),
+    );
+    check(
+      "and do not switch mode behind the card",
+      ((await edit.locator(".toolbar-hint").textContent()) ?? "").includes("edit its CSS"),
+      `hint read "${(await edit.locator(".toolbar-hint").textContent())?.trim() ?? ""}"`,
+    );
+
+    await field.fill("24px 30px");
+    await field.press("Enter");
+    await edit.waitForTimeout(200);
+    check("editing applies immediately", (await padding("plain")) === "24px 30px | 24px 30px", await padding("plain"));
+    check(
+      "the Changes tab counts it",
+      ((await edit.locator('.css-card__tab[data-tab="changes"]').textContent()) ?? "").trim() === "Changes (1)",
+      (await edit.locator('.css-card__tab[data-tab="changes"]').textContent()) ?? "",
+    );
+
+    await edit.locator('.css-card__tab[data-tab="changes"]').click();
+    await edit.waitForTimeout(120);
+    check(
+      "the change records both values",
+      ((await edit.locator(".css-card__change").first().textContent()) ?? "").replace(/\s+/g, "") ===
+        "padding8px 12px→24px 30px".replace(/\s+/g, ""),
+      (await edit.locator(".css-card__change").first().textContent()) ?? "",
+    );
+
+    // --- arrow stepping ---------------------------------------------------------
+    //
+    // The caret decides which number moves, which is the only thing that makes this
+    // usable on a shorthand. And the field is replaced on every edit, so three presses
+    // in a row is the check that matters: it fails if focus is not carried across the
+    // repaint, and one press alone would pass against that bug.
+    await edit.locator('.css-card__tab[data-tab="styles"]').click();
+    const stepper = edit.locator('.css-card input[data-property="padding"]');
+    await stepper.click();
+    await edit.keyboard.press("End");
+    await edit.keyboard.press("ArrowUp");
+    await edit.waitForTimeout(100);
+    check("Up steps the number at the caret", (await stepper.inputValue()) === "24px 31px", await stepper.inputValue());
+    check(
+      "and applies it to the page as it goes",
+      (await padding("plain")).startsWith("24px 31px"),
+      await padding("plain"),
+    );
+
+    await edit.keyboard.press("ArrowUp");
+    await edit.keyboard.press("ArrowUp");
+    await edit.waitForTimeout(100);
+    check(
+      "focus survives the repaint, so holding Up keeps stepping",
+      (await stepper.inputValue()) === "24px 33px",
+      await stepper.inputValue(),
+    );
+
+    await edit.keyboard.down("Shift");
+    await edit.keyboard.press("ArrowUp");
+    await edit.keyboard.up("Shift");
+    await edit.waitForTimeout(100);
+    check("Shift steps by ten", (await stepper.inputValue()) === "24px 43px", await stepper.inputValue());
+
+    await edit.keyboard.press("Home");
+    await edit.keyboard.press("ArrowDown");
+    await edit.waitForTimeout(100);
+    check(
+      "the caret picks which number moves",
+      (await stepper.inputValue()) === "23px 43px",
+      await stepper.inputValue(),
+    );
+
+    await edit.locator('.css-card__tab[data-tab="changes"]').click();
+    await edit.locator('.css-card [data-action="revert-all"]').click();
+    await edit.waitForTimeout(200);
+    check(
+      "reverting an element that had no inline style removes the property",
+      (await padding("plain")) === "8px 12px | -",
+      await padding("plain"),
+    );
+
+    // The case that looks the same and is not.
+    await edit.locator('.css-card__tab[data-tab="styles"]').click();
+    const inlinedBox = await edit.locator("#inlined").boundingBox();
+    await edit.mouse.click(inlinedBox.x + 40, inlinedBox.y + 10);
+    await edit.waitForTimeout(150);
+    const field2 = edit.locator('.css-card input[data-property="padding"]');
+    await field2.fill("40px");
+    await field2.press("Enter");
+    await edit.waitForTimeout(200);
+    check("it applies there too", (await padding("inlined")) === "40px | 40px", await padding("inlined"));
+
+    await edit.locator('.css-card__tab[data-tab="changes"]').click();
+    await edit.locator('.css-card [data-action="revert-all"]').click();
+    await edit.waitForTimeout(200);
+    check(
+      "reverting an element that HAD an inline style puts that value back",
+      (await padding("inlined")) === "4px 6px | 4px 6px",
+      await padding("inlined"),
+    );
+
+    // Into the report. Needs a note, because the report is built from the panel.
+    await edit.keyboard.press("Escape");
+    await edit.waitForTimeout(150);
+    await edit.keyboard.press("5");
+    await edit.mouse.click(plainBox.x + 40, plainBox.y + 10);
+    await edit.waitForTimeout(150);
+    const field3 = edit.locator('.css-card input[data-property="padding"]');
+    await field3.fill("18px");
+    await field3.press("Enter");
+    await edit.waitForTimeout(150);
+    await edit.keyboard.press("Escape");
+    await edit.waitForTimeout(150);
+    await edit.keyboard.press("1");
+    await edit.mouse.click(plainBox.x + 40, plainBox.y + 10);
+    await edit.locator(".composer").waitFor({ state: "visible", timeout: 5_000 });
+    await edit.locator(".composer__input").fill("padding was too tight");
+    await edit.locator(".composer .button--primary").click();
+    await edit.locator(".composer").waitFor({ state: "detached", timeout: 5_000 });
+    await edit.locator('.tool[aria-label^="Annotations"]').click();
+    await edit.locator(".panel").waitFor({ state: "visible", timeout: 5_000 });
+    await edit.locator(".panel .button--primary").click();
+    const editReport = await edit.evaluate(() => navigator.clipboard.readText());
+    check(
+      "the report carries the CSS changes section",
+      editReport.includes("## CSS changes") &&
+        editReport.includes("- `padding`: `8px 12px` \u2192 `18px`"),
+      editReport.slice(-400),
+    );
+
+    // Switching the editor off must close the card and leave the mode — but must NOT
+    // undo the edits, which are the user's work rather than the mode's.
+    await edit.locator('.tool[aria-label^="Annotations"]').click();
+    await edit.locator('.tool[aria-label^="Settings"]').click();
+    await edit.locator('.settings input[data-setting="cssEditor"]').click();
+    await edit.keyboard.press("Escape");
+    await edit.waitForTimeout(250);
+    check(
+      "switching the editor off takes mode 5 with it",
+      (await edit.locator('.tool[aria-label^="Edit CSS"]:visible').count()) === 0 &&
+        (await edit.locator(".css-card:visible").count()) === 0,
+    );
+    check(
+      "but leaves the edits alone — they are the user's, not the mode's",
+      (await padding("plain")) === "18px | 18px",
+      await padding("plain"),
+    );
+
+    // -------------------------------------------------------------------------
     // Rulers, guides and the layout grid
     // -------------------------------------------------------------------------
     //
@@ -1266,10 +1476,20 @@ async function main() {
 
     // Changing a number redraws without a reload.
     await ruled.locator('.tool[aria-label^="Settings"]').click();
-    await ruled.locator('.settings input[data-setting="gridColumns"]').fill("6");
-    await ruled.locator('.settings input[data-setting="gridColumns"]').press("Enter");
+    // Typed, not filled: a digit typed here used to reach the mode keys as well as the
+    // field, because the retargeted event looked like it came from a plain `DIV`.
+    const columns = ruled.locator('.settings input[data-setting="gridColumns"]');
+    await columns.click();
+    await columns.fill("");
+    await ruled.keyboard.type("6");
+    await ruled.keyboard.press("Enter");
     await ruled.waitForTimeout(250);
     check("changing the column count redraws the grid", (await drawn()).bands === 6, JSON.stringify(await drawn()));
+    check(
+      "and typing it did not switch mode behind the card",
+      ((await ruled.locator(".toolbar-hint").textContent()) ?? "").startsWith("Click an element"),
+      `hint read "${(await ruled.locator(".toolbar-hint").textContent())?.trim() ?? ""}"`,
+    );
 
     // The master has to take the rulers with it while their own switch is still on.
     // This is the state that matters: rulers cost the page two dead bands, and a user

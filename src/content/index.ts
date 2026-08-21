@@ -6,7 +6,7 @@
 // both the MAIN-world inspector and the service worker.
 // =============================================================================
 
-import { formatSource, generateOutput } from "../shared/output";
+import { formatCssChanges, formatSource, generateOutput } from "../shared/output";
 import { HIDDEN_KEY } from "../shared/protocol";
 import type { RuntimeMessage, RuntimeResponse } from "../shared/protocol";
 import {
@@ -86,6 +86,8 @@ import {
 import { Overlay } from "./ui/overlay";
 import { measureGap, readBoxModel, readStyleSummary } from "./measure";
 import { Panel } from "./ui/panel";
+import { applyOverride, listOverrides, overridesFor, revertAll, revertOverride } from "./css-edit";
+import { CssCard, EDITABLE } from "./ui/css-card";
 import { GridOverlay } from "./ui/grid";
 import { MeasureOverlay } from "./ui/measure-overlay";
 import { Rulers, type Guide } from "./ui/rulers";
@@ -223,6 +225,8 @@ let toolbar!: Toolbar;
 let panel: Panel | null = null;
 let settingsCard: SettingsCard | null = null;
 let measureOverlay!: MeasureOverlay;
+let cssCard: CssCard | null = null;
+let editTarget: Element | null = null;
 let rulers!: Rulers;
 let grid!: GridOverlay;
 
@@ -308,6 +312,7 @@ const settingsCallbacks = {
     void saveSettings(settings);
     applyAppearance();
     enforceMeasureSetting();
+    enforceCssSetting();
     render();
   },
 };
@@ -361,6 +366,20 @@ function measureModeAvailable(): boolean {
  * say why. Called from both places settings can change — this card, and a push from the
  * popup in another tab.
  */
+/**
+ * Leave mode 5 if the setting that provides it has just been switched off — and take the
+ * card with it. Overrides already applied are deliberately *not* reverted: they are the
+ * user's edits, not the mode's, and throwing away someone's work because they closed a
+ * panel would be the worst possible reading of a settings toggle.
+ */
+function enforceCssSetting(): void {
+  if (settings.cssEditor) return;
+  if (cssCard) toggleCssCard(false);
+  if (mode !== "edit") return;
+  mode = "point";
+  broadcastFrameState(active, mode);
+}
+
 function enforceMeasureSetting(): void {
   if (measureModeAvailable() || mode !== "measure") return;
   mode = "point";
@@ -387,6 +406,67 @@ async function pickAndCopy(): Promise<void> {
   ui.toast(copied ? `${hex} copied` : hex);
 }
 
+/** What the card shows for the element in hand: computed values plus its overrides. */
+function cssSubject(): { label: string; selector: string; values: Record<string, string>; overrides: ReturnType<typeof overridesFor> } | null {
+  if (!editTarget?.isConnected) return null;
+  const computed = getComputedStyle(editTarget);
+  const values: Record<string, string> = {};
+  for (const property of EDITABLE) values[property] = computed.getPropertyValue(property).trim();
+
+  return {
+    label: elementTag(editTarget),
+    selector: buildSelector(editTarget),
+    values,
+    overrides: overridesFor(editTarget),
+  };
+}
+
+function renderCssCard(): void {
+  cssCard?.render(cssSubject(), listOverrides());
+}
+
+const cssCallbacks = {
+  onClose: () => toggleCssCard(false),
+  onEdit: (property: string, value: string) => {
+    if (!editTarget?.isConnected) return;
+    applyOverride(editTarget, elementTag(editTarget), property, value);
+    renderCssCard();
+  },
+  onRevert: (property: string) => {
+    if (!editTarget?.isConnected) return;
+    revertOverride(editTarget, property);
+    renderCssCard();
+  },
+  onRevertAll: () => {
+    revertAll();
+    renderCssCard();
+  },
+  onCopy: () => {
+    // Same shape the report uses, so what you paste and what you file agree.
+    const text = formatCssChanges(listOverrides()).join("\n");
+    void copyText(text, ui.shadow).then((ok) =>
+      ui.toast(ok ? "CSS changes copied" : "Copy failed", ok ? "success" : "error"),
+    );
+  },
+};
+
+/** Mirrors `toggleSettings`, down to the `force` argument and the trailing `render()`. */
+function toggleCssCard(force?: boolean): void {
+  const next = force ?? !cssCard;
+  if (next === !!cssCard) return;
+
+  if (next) {
+    toggleSettings(false);
+    cssCard = new CssCard(ui.cardLayer, cssCallbacks);
+    renderCssCard();
+    cssCard.anchorTo(toolbar.dockBox());
+  } else {
+    cssCard?.destroy();
+    cssCard = null;
+  }
+  render();
+}
+
 function render(): void {
   toolbar.update({
     active,
@@ -396,6 +476,7 @@ function render(): void {
     settingsOpen: !!settingsCard,
     measureMode: measureModeAvailable(),
     colourPicker: settings.measureTools,
+    cssEditor: settings.cssEditor,
     collapsed: settings.toolbarCollapsed,
     count: annotations.length,
     page,
@@ -416,6 +497,7 @@ function render(): void {
   markers.render(annotations, settings.showMarkers && !!annotations.length);
   panel?.render(annotations, settings.detailLevel);
   settingsCard?.render(settings);
+  renderCssCard();
   void notifyBadge();
 }
 
@@ -509,6 +591,26 @@ function saveGuides(guides: Guide[]): void {
   } catch {
     // Sandboxed frame, or storage disabled. The guides stay on screen either way.
   }
+}
+
+/**
+ * Would this element have taken the keystroke as text?
+ *
+ * Narrower than "is it a form control", and the difference matters. A checkbox holds
+ * focus after you click it, and swallowing every key while it does would make the mode
+ * keys feel dead for the rest of the session — you clicked a switch, you did not start
+ * typing. A checkbox takes no text, so a digit pressed on one is a mode key.
+ *
+ * `select` stays in: letters jump between its options and arrows move the selection.
+ */
+function isTextEntry(node: HTMLElement | null | undefined): boolean {
+  if (!node) return false;
+  if (node.isContentEditable) return true;
+  if (node.tagName === "TEXTAREA" || node.tagName === "SELECT") return true;
+  if (node.tagName !== "INPUT") return false;
+  return !/^(checkbox|radio|button|submit|reset|color|range|file|image)$/i.test(
+    (node as HTMLInputElement).type,
+  );
 }
 
 /** Whether this tab was asked to hide the overlay for the rest of its session. */
@@ -1162,6 +1264,7 @@ function buildReport(): string {
       page,
       diagnostics: settings.captureDiagnostics ? diagnosticsCache : null,
       actions: settings.captureDiagnostics ? readActions() : [],
+      cssChanges: listOverrides(),
     },
     settings.detailLevel,
   );
@@ -1798,6 +1901,7 @@ function installTopFrame(): void {
     settings = await loadSettings();
     applyAppearance();
     enforceMeasureSetting();
+    enforceCssSetting();
     render();
   }
 
@@ -1857,6 +1961,19 @@ function installTopFrame(): void {
 
       event.preventDefault();
       event.stopPropagation();
+
+      if (mode === "edit") {
+        const picked = document.elementFromPoint(event.clientX, event.clientY);
+        if (!picked || !eligible(picked)) return;
+        editTarget = picked;
+        // Opening on the first click rather than requiring the card first: the mode is
+        // reached by pressing 5, and a mode whose first click does nothing visible is
+        // the mistake mode 4 already made once.
+        if (!cssCard) toggleCssCard(true);
+        else renderCssCard();
+        overlay.showHighlights([picked.getBoundingClientRect()], { primary: elementTag(picked) });
+        return;
+      }
 
       if (mode === "measure") {
         const picked = document.elementFromPoint(event.clientX, event.clientY);
@@ -2043,6 +2160,10 @@ function installTopFrame(): void {
         toggleSettings(false);
         return;
       }
+      if (cssCard) {
+        toggleCssCard(false);
+        return;
+      }
       // A half-taken measurement is as likely a target for Escape as a half-built pick
       // set, and for the same reason: it is a gesture the user started and abandoned.
       // Neither leaves the mode — only the gesture.
@@ -2070,10 +2191,16 @@ function installTopFrame(): void {
 
     if (composer) return;
 
-    // Never hijack a key the user is typing into the page.
-    const target = keyboard.target as HTMLElement | null;
-    if (target?.isContentEditable) return;
-    if (target && /^(input|textarea|select)$/i.test(target.tagName)) return;
+    // Never hijack a key the user is typing — into the page, or into our own UI.
+    //
+    // `event.target` is **retargeted to the shadow host** for anything inside our shadow
+    // root, so it reports `DIV` and every guard below silently misses: typing `15px`
+    // into a CSS value switched to mode 1 and then mode 5, and typing a column count
+    // into Settings switched modes behind the card. `composedPath()[0]` is the element
+    // actually focused, on both sides of the boundary.
+    const target = (keyboard.composedPath()[0] as HTMLElement | undefined) ??
+      (keyboard.target as HTMLElement | null);
+    if (isTextEntry(target)) return;
     if (keyboard.metaKey || keyboard.ctrlKey || keyboard.altKey) return;
 
     // Above the `active` guard on purpose: the pill covers the bottom-right corner
@@ -2097,6 +2224,15 @@ function installTopFrame(): void {
         break;
       case "2":
         mode = "text";
+        resetMarquee();
+        clearPicked();
+        overlay.hideAll();
+        measureOverlay.hideAll();
+        render();
+        break;
+      case "5":
+        if (!settings.cssEditor) break;
+        mode = "edit";
         resetMarquee();
         clearPicked();
         overlay.hideAll();

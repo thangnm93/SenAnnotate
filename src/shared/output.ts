@@ -24,6 +24,7 @@ import {
   type Annotation,
   type BoxModel,
   type ContrastReport,
+  type ElementOverrides,
   type Diagnostics,
   type Measurements,
   type OutputDetailLevel,
@@ -38,6 +39,8 @@ export interface OutputContext {
   page: PageFrameworkInfo | null;
   diagnostics?: Diagnostics | null;
   actions?: ActionEntry[];
+  /** Live CSS overrides made on this page, if any. */
+  cssChanges?: ElementOverrides[];
 }
 
 // -----------------------------------------------------------------------------
@@ -204,6 +207,35 @@ function formatContrast(contrast: ContrastReport): string {
     return `${ratio} · passes AA, fails AAA (needs ${contrast.large ? "4.5" : "7"}:1)${size}`;
   }
   return `${ratio} · fails AA (needs ${contrast.large ? "3" : "4.5"}:1)${size}`;
+}
+
+/**
+ * The CSS the reviewer actually changed, as a section of its own.
+ *
+ * Top-level rather than attached to an annotation, because an override is not a note
+ * about an element — it is an instruction about one, and it exists whether or not
+ * anybody wrote a sentence next to it.
+ *
+ * The heading is the **selector**, not the friendly label: this section is the one part
+ * of the report meant to be acted on mechanically, and `button.primary` is not something
+ * you can paste into a stylesheet.
+ *
+ * Elements whose overrides were all reverted are dropped rather than printed empty — a
+ * heading with nothing under it reads as a change that failed to record.
+ */
+export function formatCssChanges(elements: ElementOverrides[]): string[] {
+  const populated = elements.filter((element) => element.overrides.length > 0);
+  if (!populated.length) return [];
+
+  const lines = ["## CSS changes", ""];
+  for (const element of populated) {
+    lines.push(`### \`${element.selector}\``, "");
+    for (const { property, from, to } of element.overrides) {
+      lines.push(`- \`${property}\`: \`${from}\` \u2192 \`${to}\``);
+    }
+    lines.push("");
+  }
+  return lines;
 }
 
 /** `gap 24×0px`, for the one-line bullet in a compact report. */
@@ -557,6 +589,10 @@ export function generateOutput(
     }
     return lines.join("\n").trim();
   }
+
+  // Above the diagnostics and below the notes: an override is an instruction, and it
+  // outranks a console error the reader may not have to do anything about.
+  lines.push(...formatCssChanges(context.cssChanges ?? []));
 
   lines.push(...renderDone(done));
 

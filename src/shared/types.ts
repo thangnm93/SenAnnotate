@@ -30,7 +30,7 @@ export type ThemePreference = "auto" | "light" | "dark";
 export type ScreenshotDelivery = "path" | "embed";
 
 /** What a click means while inspect mode is on. */
-export type InspectMode = "point" | "text" | "area" | "measure";
+export type InspectMode = "point" | "text" | "area" | "measure" | "edit";
 
 // -----------------------------------------------------------------------------
 // Triage
@@ -122,6 +122,31 @@ export interface GapMeasurement extends GapGeometry {
   /** Human-readable name of the second element, e.g. `button "Cancel"`. */
   toElement: string;
   toSelector: string;
+}
+
+/**
+ * One property changed on one element.
+ *
+ * `from` is what the reader needs — the value the page had — so it is the *computed*
+ * one, not the inline one, which is usually empty. `priorInline` is what a revert needs
+ * and is a different thing: an element may already have carried an inline value, and
+ * clearing the property would leave the page in a state it was never in.
+ */
+export interface CssOverride {
+  property: string;
+  from: string;
+  to: string;
+  priorInline: string;
+}
+
+/** Every override made on one element, kept together for the report and the revert. */
+export interface ElementOverrides {
+  /** Stable within the page's life; the report is keyed on `selector`. */
+  id: string;
+  selector: string;
+  /** `div.card`, for a heading a human can place. */
+  label: string;
+  overrides: CssOverride[];
 }
 
 export interface Measurements {
@@ -428,6 +453,14 @@ export interface Settings {
    * so the people who do not want it should not have to see it, and the hint line should
    * not spend a clause advertising it to them.
    */
+  /**
+   * Live CSS editing: mode 5, its button, and the card. Off by default.
+   *
+   * This is the switch that turns a tool which reads a page into one that changes it —
+   * see `docs/css-editor/brief.md`. Nothing it enables touches the page until an element
+   * is clicked in mode 5.
+   */
+  cssEditor: boolean;
   measureTools: boolean;
   /**
    * Mode 4 itself. Only reachable when `measureTools`, and switched **on** whenever the
@@ -493,6 +526,7 @@ export const DEFAULT_SETTINGS: Settings = {
   componentMode: "filtered",
   theme: "auto",
   showMarkers: true,
+  cssEditor: false,
   measureTools: false,
   measureDistances: true,
   showBoxModel: false,

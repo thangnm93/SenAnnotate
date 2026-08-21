@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>CSS edit fixture</title>
+    <style>
+      body { margin: 0; font: 14px/1.4 system-ui, sans-serif; background: #ffffff; height: 700px; }
+      /* #plain takes its padding from this stylesheet, so its inline style is empty and
+         a revert must REMOVE the property. #inlined already carries one, so a revert must
+         put that back — the two cases the engine has to tell apart. */
+      #plain { position: absolute; left: 40px; top: 100px; padding: 8px 12px; background: #2563eb; color: #fff; }
+      #inlined { position: absolute; left: 40px; top: 200px; padding: 8px 12px; background: #16a34a; color: #fff; }
+    </style>
+  </head>
+  <body>
+    <h1 style="margin: 0; padding: 20px 0 0 40px">CSS edit fixture</h1>
+    <div id="plain">No inline style</div>
+    <div id="inlined" style="padding: 4px 6px">Has an inline padding</div>
+  </body>
+</html>

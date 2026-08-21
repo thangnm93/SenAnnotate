@@ -23,6 +23,8 @@ export interface ToolbarState {
    * must not take it away.
    */
   colourPicker: boolean;
+  /** Whether mode 5 exists. Its own master, independent of the measuring one. */
+  cssEditor: boolean;
   /** Shrunk to a single handle, so the pill stops covering the page. */
   collapsed: boolean;
   count: number;
@@ -71,6 +73,7 @@ const MODES: { mode: InspectMode; iconName: string; title: string }[] = [
   { mode: "text", iconName: "text", title: "Select text (2)" },
   { mode: "area", iconName: "marquee", title: "Drag across elements (3)" },
   { mode: "measure", iconName: "arrows", title: "Measure distances (4)" },
+  { mode: "edit", iconName: "pencil", title: "Edit CSS (5)" },
 ];
 
 /**
@@ -83,6 +86,7 @@ const MODE_HINTS: Record<InspectMode, string> = {
   text: "Select text · 1 point · 3 area",
   area: "Drag across elements · 1 point · 2 text",
   measure: "Click two elements · C captures the pair · Esc clears · 1 point · 2 text · 3 area",
+  edit: "Click an element to edit its CSS · Esc closes · 1 point · 2 text · 3 area",
 };
 
 /**
@@ -94,10 +98,13 @@ const MODE_HINTS: Record<InspectMode, string> = {
  * measuring existed.
  */
 const MEASURE_HINT = " · 4 measure";
+const EDIT_HINT = " · 5 edit";
 
-function hintFor(mode: InspectMode, measureMode: boolean): string {
-  const base = MODE_HINTS[mode];
-  return measureMode && mode !== "measure" ? base + MEASURE_HINT : base;
+function hintFor(mode: InspectMode, measureMode: boolean, cssEditor: boolean): string {
+  let hint = MODE_HINTS[mode];
+  if (measureMode && mode !== "measure") hint += MEASURE_HINT;
+  if (cssEditor && mode !== "edit") hint += EDIT_HINT;
+  return hint;
 }
 
 export class Toolbar {
@@ -533,7 +540,10 @@ export class Toolbar {
 
     this.pickerButton.style.display = state.colourPicker ? "" : "none";
 
-    this.modeHint = hintFor(state.mode, state.measureMode);
+    const editButton = this.modeButtons.get("edit");
+    if (editButton) editButton.style.display = state.cssEditor ? "" : "none";
+
+    this.modeHint = hintFor(state.mode, state.measureMode, state.cssEditor);
     this.hintVisible = state.active;
     this.hintElement.style.display = state.active ? "block" : "none";
     if (this.hintOverride === null) this.hintElement.textContent = this.modeHint;

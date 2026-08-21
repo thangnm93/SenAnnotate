@@ -125,6 +125,10 @@ path all clear the anchor.
 - **Page rulers, guides, layout grid** — the release after. Those never enter the
   report, which is why they rank last despite being the cheapest.
 - Anything that *edits* the page. This tool reads.
+  > **No longer true, as of `docs/css-editor/`.** The read-only rule shaped the whole
+  > architecture and is worth knowing as history, but anything quoting it from here on is
+  > quoting history. Left in place rather than deleted: this file records what was decided
+  > at the time.
 
 ## Success criteria
 

@@ -32,6 +32,7 @@ settings row — click the page once and they come back. See [[Troubleshooting]]
 | <kbd>2</kbd> | Select text |
 | <kbd>3</kbd> | Drag across elements |
 | <kbd>4</kbd> | Measure distances — only when *Measuring tools* is on in Settings |
+| <kbd>5</kbd> | Edit CSS — needs *Live CSS editor* on in Settings |
 
 Mode keys need inspect mode on. <kbd>H</kbd> does not, which is the one asymmetry.
 
@@ -49,6 +50,7 @@ Mode keys need inspect mode on. <kbd>H</kbd> does not, which is the one asymmetr
 | <kbd>Esc</kbd> | Drop the pick set, or the measuring anchor, staying in inspect mode |
 | **Drag the pill** | Move the toolbar — remembered per page |
 | **Drag from a ruler** | Place a guide — drag it back onto the ruler to remove it. Needs *Screen rulers and guides* on |
+| <kbd>↑</kbd> / <kbd>↓</kbd> | Step the number under the caret in a CSS value — <kbd>Shift</kbd> by 10, <kbd>Alt</kbd> by 0.1 |
 
 **On macOS use <kbd>⌘</kbd>.** <kbd>Ctrl</kbd>+click there is a right-click.
 

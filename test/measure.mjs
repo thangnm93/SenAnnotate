@@ -246,5 +246,72 @@ check("a mid grey fails AA as body text", report(mid, white, 14, 400).aa === fal
 check("the same grey passes AA as large text", report(mid, white, 24, 400).aa === true, JSON.stringify(report(mid, white, 24, 400)));
 check("the band is the one where large matters", near(report(mid, white, 14, 400).ratio, 3.45), String(report(mid, white, 14, 400).ratio));
 
+// -----------------------------------------------------------------------------
+// CSS overrides
+// -----------------------------------------------------------------------------
+//
+// The engine writes to real elements, so it needs a DOM. These checks cover the part
+// that is pure: how a list of overrides becomes the report section. The apply/revert
+// round trip is covered in the browser, where an element exists to revert.
+
+const { formatCssChanges } = await load("src/shared/output.ts", "output-css.mjs");
+
+const empty = formatCssChanges([]);
+check("no overrides means no section at all", empty.length === 0, JSON.stringify(empty));
+
+const section = formatCssChanges([
+  {
+    id: "e0",
+    selector: ".actions > button.primary",
+    label: "button.primary",
+    overrides: [
+      { property: "padding", from: "8px 12px", to: "12px 20px", priorInline: "" },
+      { property: "background-color", from: "rgb(37, 99, 235)", to: "rgb(29, 78, 216)", priorInline: "" },
+    ],
+  },
+]).join("\n");
+
+check("the section names the selector, not the friendly label", section.includes("### `.actions > button.primary`"), section);
+check("each line carries both values", section.includes("- `padding`: `8px 12px` \u2192 `12px 20px`"), section);
+check("and the second property too", section.includes("`rgb(37, 99, 235)` \u2192 `rgb(29, 78, 216)`"), section);
+check("the section is headed once", (section.match(/## CSS changes/g) ?? []).length === 1, section);
+
+// An element whose overrides were all reverted must not leave an empty heading behind.
+const reverted = formatCssChanges([
+  { id: "e1", selector: ".gone", label: "div.gone", overrides: [] },
+]);
+check("an element with nothing left is dropped", reverted.length === 0, JSON.stringify(reverted));
+
+// --- nudging a number inside a CSS value ----------------------------------------
+const { nudge } = await load("src/content/css-edit.ts", "cssedit.mjs");
+const n = (value, caret, delta) => nudge(value, caret, delta)?.value ?? null;
+
+check("a single value steps", n("24px", 2, 1) === "25px", String(n("24px", 2, 1)));
+check("and steps down", n("24px", 2, -1) === "23px", String(n("24px", 2, -1)));
+check("a value with no number is left alone", n("auto", 2, 1) === null, String(n("auto", 2, 1)));
+
+// The caret is what makes this usable on a shorthand: `8px 12px` has two numbers and
+// nudging both, or always the first, is not what pressing Up means.
+check("the caret picks the first of two", n("8px 12px", 1, 1) === "9px 12px", String(n("8px 12px", 1, 1)));
+check("the caret picks the second of two", n("8px 12px", 5, 1) === "8px 13px", String(n("8px 12px", 5, 1)));
+check("a caret past everything takes the last", n("8px 12px", 8, 1) === "8px 13px", String(n("8px 12px", 8, 1)));
+check("a caret at 0 takes the first", n("8px 12px", 0, 1) === "9px 12px", String(n("8px 12px", 0, 1)));
+
+// Three numbers, none of them lengths.
+check("a colour channel steps on its own", n("rgb(37, 99, 235)", 9, 1) === "rgb(37, 100, 235)", String(n("rgb(37, 99, 235)", 9, 1)));
+
+// Precision is preserved, and gained when the step needs it.
+check("decimals survive", n("1.5rem", 2, 1) === "2.5rem", String(n("1.5rem", 2, 1)));
+check("a fine step keeps one place", n("1.5rem", 2, 0.1) === "1.6rem", String(n("1.5rem", 2, 0.1)));
+check("a fine step on an integer gains a place", n("24px", 2, 0.1) === "24.1px", String(n("24px", 2, 0.1)));
+check("a coarse step stays whole", n("24px", 2, 10) === "34px", String(n("24px", 2, 10)));
+check("negatives step", n("-4px", 2, 1) === "-3px", String(n("-4px", 2, 1)));
+check("through zero", n("0", 1, -1) === "-1", String(n("0", 1, -1)));
+
+// The caret comes back so the field can be re-focused where the user left it.
+// "8px 13px" — index 6 is the character after "13", which is where a caret belongs
+// when you have just stepped that number. Counted out, not guessed: the first guess was 7.
+check("the caret lands after the new number", nudge("8px 12px", 5, 1).caret === 6, String(nudge("8px 12px", 5, 1).caret));
+
 console.log(failures ? `\n${failures} failed` : "\nall checks passed");
 process.exit(failures ? 1 : 0);
