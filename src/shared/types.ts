@@ -438,6 +438,19 @@ export interface Settings {
   measureDistances: boolean;
   /** Draw the box model on the hover highlight. Only reachable when `measureTools`. */
   showBoxModel: boolean;
+  /**
+   * Ruler strips down the top and left edges, and the guides dragged out of them.
+   *
+   * The one setting in this extension that takes a region of the page away from the
+   * page: the strips and the guides must receive pointer events to be draggable, and
+   * anything that does cannot be clicked through. Off by default for that reason alone.
+   */
+  showRulers: boolean;
+  /** A column grid over the viewport. Purely visual; never reaches the report. */
+  showGrid: boolean;
+  gridColumns: number;
+  gridGutter: number;
+  gridMargin: number;
   /** Freeze animations automatically whenever inspect mode turns on. */
   freezeOnInspect: boolean;
   /** Include the owner component's props in the report. */
@@ -483,6 +496,11 @@ export const DEFAULT_SETTINGS: Settings = {
   measureTools: false,
   measureDistances: true,
   showBoxModel: false,
+  showRulers: false,
+  showGrid: false,
+  gridColumns: 12,
+  gridGutter: 24,
+  gridMargin: 72,
   freezeOnInspect: false,
   includeProps: true,
   maxComponents: 6,

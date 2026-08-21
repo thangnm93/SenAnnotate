@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Rulers fixture</title>
+    <style>
+      /* Tall enough to scroll: the point of document coordinates is that they survive
+         one, and a fixture that fits in the viewport cannot show that. Nothing else in
+         the suite annotates this page. */
+      body { margin: 0; font: 14px/1.4 system-ui, sans-serif; background: #ffffff; height: 1600px; }
+      #target { position: absolute; left: 100px; top: 400px; width: 200px; height: 80px; background: #e2e8f0; }
+    </style>
+  </head>
+  <body>
+    <h1 style="margin: 0; padding: 20px 0 0 40px">Rulers fixture</h1>
+    <div id="target">Aligned to nothing in particular</div>
+  </body>
+</html>

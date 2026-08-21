@@ -85,7 +85,9 @@ import {
 import { Overlay } from "./ui/overlay";
 import { measureGap, readBoxModel, readStyleSummary } from "./measure";
 import { Panel } from "./ui/panel";
+import { GridOverlay } from "./ui/grid";
 import { MeasureOverlay } from "./ui/measure-overlay";
+import { Rulers, type Guide } from "./ui/rulers";
 import { SettingsCard } from "./ui/settings";
 import { createUiRoot, type UiRoot } from "./ui/root";
 import { hideTooltip, installTooltips, isFocusTooltipVisible } from "./ui/tooltip";
@@ -220,6 +222,8 @@ let toolbar!: Toolbar;
 let panel: Panel | null = null;
 let settingsCard: SettingsCard | null = null;
 let measureOverlay!: MeasureOverlay;
+let rulers!: Rulers;
+let grid!: GridOverlay;
 
 /**
  * Build the chrome. Top frame only — a second toolbar inside every iframe is both
@@ -230,6 +234,9 @@ function createTopUi(): void {
   installTooltips(ui.cardLayer);
   overlay = new Overlay(ui.overlayLayer);
   measureOverlay = new MeasureOverlay(ui.overlayLayer);
+  grid = new GridOverlay(ui.overlayLayer);
+  rulers = new Rulers(ui.overlayLayer, { onGuidesChanged: (next) => saveGuides(next) });
+  rulers.setGuides(loadGuides());
 
   markers = new Markers(ui.markerLayer, {
     onClick: (annotation) => openEditor(annotation),
@@ -371,6 +378,19 @@ function render(): void {
     count: annotations.length,
     page,
   });
+  // Both hang off the same master as everything else measuring. Rulers are the only
+  // surface here that costs the page a region, so `showRulers` alone is not enough.
+  rulers.show(settings.measureTools && settings.showRulers);
+  if (settings.measureTools && settings.showGrid) {
+    grid.render({
+      columns: settings.gridColumns,
+      gutter: settings.gridGutter,
+      margin: settings.gridMargin,
+    });
+  } else {
+    grid.hide();
+  }
+
   markers.render(annotations, settings.showMarkers && !!annotations.length);
   panel?.render(annotations, settings.detailLevel);
   settingsCard?.render(settings);
@@ -432,6 +452,41 @@ async function toggleFreeze(force?: boolean): Promise<void> {
   await setFrozen(frozen);
   ui.toast(frozen ? "Animations frozen" : "Animations resumed");
   render();
+}
+
+/**
+ * Guides for this page, in this tab.
+ *
+ * `sessionStorage`, not `chrome.storage`: a guide is a pencil line on one page, and the
+ * three options were losing them on reload (a reload is the most common thing that
+ * happens during a review), a `chrome.storage.local` key with a quota and cross-tab
+ * collisions on the same URL, or this — survives a reload, dies with the tab.
+ *
+ * Wrapped, because `sessionStorage` throws in a sandboxed frame and with storage
+ * disabled. Same treatment `isHiddenThisSession()` gives it.
+ */
+const GUIDES_KEY = "senannotate:guides";
+
+function guidesKey(): string {
+  return `${GUIDES_KEY}:${window.location.pathname}`;
+}
+
+function loadGuides(): Guide[] {
+  try {
+    const raw = window.sessionStorage.getItem(guidesKey());
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    return Array.isArray(parsed) ? (parsed as Guide[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveGuides(guides: Guide[]): void {
+  try {
+    window.sessionStorage.setItem(guidesKey(), JSON.stringify(guides));
+  } catch {
+    // Sandboxed frame, or storage disabled. The guides stay on screen either way.
+  }
 }
 
 /** Whether this tab was asked to hide the overlay for the rest of its session. */
@@ -1563,6 +1618,14 @@ function queueSync(): void {
     // containing block for our fixed host — and a resize changes the viewport we fit to.
     ui.syncPlacement();
     markers.syncPositions();
+    rulers.sync();
+    if (settings.measureTools && settings.showGrid) {
+      grid.render({
+        columns: settings.gridColumns,
+        gutter: settings.gridGutter,
+        margin: settings.gridMargin,
+      });
+    }
     if (composer || !active) return;
     if (mode === "measure") {
       // The anchor outline and the bands are both viewport-space, so a scroll leaves

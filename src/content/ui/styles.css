@@ -466,6 +466,190 @@ button {
 }
 
 /* ---------------------------------------------------------------------------
+ * Rulers and guides
+ *
+ * The only `pointer-events: auto` in this overlay that is not a card. Every rule below
+ * that opts in is a region the page cannot be clicked through — see the header of
+ * `ui/rulers.ts`. Nothing here renders unless the user switched rulers on.
+ * ------------------------------------------------------------------------- */
+
+.ruler {
+  position: fixed;
+  pointer-events: auto;
+  background: var(--sa-bg-solid);
+  color: var(--sa-fg-muted);
+  font-size: 8px;
+  font-family: var(--sa-mono);
+  line-height: 1;
+  overflow: hidden;
+  cursor: crosshair;
+}
+
+.ruler--top {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 20px;
+  border-bottom: 1px solid var(--sa-border);
+}
+
+.ruler--left {
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 20px;
+  border-right: 1px solid var(--sa-border);
+}
+
+/* The square where the strips cross, so two sets of labels cannot collide in it. */
+.ruler-corner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  pointer-events: auto;
+  background: var(--sa-bg-solid);
+  border-right: 1px solid var(--sa-border);
+  border-bottom: 1px solid var(--sa-border);
+  z-index: 1;
+}
+
+.ruler__tick {
+  position: absolute;
+  background: var(--sa-fg-muted);
+  opacity: 0.45;
+}
+
+.ruler--top .ruler__tick {
+  bottom: 0;
+  width: 1px;
+  height: 4px;
+}
+
+.ruler--left .ruler__tick {
+  right: 0;
+  height: 1px;
+  width: 4px;
+}
+
+.ruler__tick--major {
+  opacity: 0.8;
+}
+
+.ruler--top .ruler__tick--major {
+  height: 8px;
+}
+
+.ruler--left .ruler__tick--major {
+  width: 8px;
+}
+
+.ruler__label {
+  position: absolute;
+  white-space: nowrap;
+}
+
+.ruler--top .ruler__label {
+  left: 2px;
+  top: -12px;
+}
+
+/*
+ * Turned on its side so a four-digit document coordinate fits in a 20px strip.
+ *
+ * `rotate(90deg)` about the left-top corner sends the text *downward* and its own line
+ * height *leftward*, so the origin has to sit near the strip's right edge for the glyphs
+ * to land inside it. The first attempt used `-90deg` at `left: -12px`, which put the box
+ * at x −1 and let `overflow: hidden` eat it — measured, not eyeballed.
+ */
+.ruler--left .ruler__label {
+  left: -1px;
+  top: 3px;
+  transform: rotate(90deg);
+  transform-origin: left top;
+}
+
+/*
+ * The hit area is 7px and transparent; the 1px line inside it is what the guide claims
+ * to be. A drag target the width of the thing it points at would be unusable, and a
+ * 7px-wide painted line would be a lie about where the guide is.
+ */
+.guide {
+  position: fixed;
+  pointer-events: auto;
+  background: transparent;
+}
+
+.guide--x {
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: ew-resize;
+}
+
+.guide--y {
+  left: 0;
+  right: 0;
+  height: 7px;
+  cursor: ns-resize;
+}
+
+.guide::after {
+  content: "";
+  position: absolute;
+  background: rgba(56, 189, 248, 0.95);
+}
+
+.guide--x::after {
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+}
+
+.guide--y::after {
+  left: 0;
+  right: 0;
+  top: 3px;
+  height: 1px;
+}
+
+.guide--dragging::after {
+  background: rgba(14, 165, 233, 1);
+}
+
+.guide-readout {
+  position: fixed;
+  pointer-events: none;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(14, 165, 233, 1);
+  color: #fff;
+  font-size: 10px;
+  font-family: var(--sa-mono);
+  white-space: nowrap;
+  z-index: 2;
+}
+
+/*
+ * The layout grid. Fixed to the viewport, full height, behind everything else this
+ * overlay draws — it is a backdrop to check alignment against, not a thing to read.
+ */
+.grid-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.grid-overlay__band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(236, 72, 153, 0.12);
+}
+
+/* ---------------------------------------------------------------------------
  * Measurement overlay
  *
  * The band colours are the one place in this UI that does NOT derive from
