@@ -555,47 +555,124 @@ button {
 }
 
 /*
- * The properties the bands cannot say. Deliberately six short rows rather than a
- * scrollable computed-style table: this sits over someone else's page, and a panel
- * large enough to need scrolling is a panel that has stopped being an overlay.
+ * The inspector panel.
+ *
+ * Grouped `property: value` rows in CSS's own vocabulary, because the reader is about to
+ * go and write CSS — a panel that renames things makes them translate twice. Fixed
+ * width so the value column lines up down the whole panel and the eye can run it.
+ *
+ * It is `pointer-events: none` like everything else in this overlay, so it carries no
+ * close button: letting it take the pointer would make it swallow clicks on the page
+ * beneath, and in mode 4 a click is how you anchor. It follows the hover instead.
  */
 .measure-readout {
   position: fixed;
   pointer-events: none;
-  display: grid;
-  gap: 1px;
-  padding: 5px 7px;
-  border-radius: 5px;
-  /* Solid, not `--sa-bg`: this panel lands on top of whatever the page is showing, and
-     a translucent one lets the page text through the figures it is there to make
-     readable. Same variable every real card uses. */
+  width: 216px;
+  padding: 0 0 6px;
+  border-radius: 6px;
   background: var(--sa-bg-solid);
   color: var(--sa-fg);
   border: 1px solid var(--sa-border);
   box-shadow: var(--sa-shadow);
   font-size: 10px;
   font-family: var(--sa-mono);
-  line-height: 14px;
+  line-height: 15px;
+  overflow: hidden;
+}
+
+/* The element being described, in the same CSS shape as the rows under it. */
+.measure-readout__head {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--sa-border);
+  color: var(--sa-fg);
+  font-weight: 700;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.measure-readout__section {
+  padding: 6px 8px 2px;
+  color: var(--sa-fg-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .measure-readout__row {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+/*
+ * Fixed, so every value in the panel starts at the same x. Without it each row's value
+ * begins wherever its property name happens to end, and a column of numbers you cannot
+ * scan is most of the reason a flat property list goes unread.
+ */
+.measure-readout__key {
+  min-width: 78px;
+  color: var(--sa-fg-muted);
+}
+
+/*
+ * The two band rows carry four cells after their name, which will not fit beside a key
+ * sized for `border-radius`. They are the only rows with a colour dot in front, so the
+ * dot does the identifying work the extra width would have.
+ */
+.measure-readout__key--side {
+  min-width: 46px;
+}
+
+.measure-readout__value {
+  color: var(--sa-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Small, square, and bordered so a white swatch is still visible on a light panel. */
+.measure-readout__swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  border: 1px solid var(--sa-border);
+  flex: none;
+}
+
+/* Per-side cells for the two bands. Fixed width so padding and margin line up. */
+.measure-readout__side {
+  min-width: 22px;
+  color: var(--sa-fg);
+}
+
+/*
+ * This side's figure is already drawn on its band, on the page. Dimming it is the point
+ * of the row: what stays at full weight is exactly what the page could not tell you.
+ */
+.measure-readout__side--drawn {
+  opacity: 0.4;
 }
 
 /* Ties a row to the band it describes — the only reason those two colours are fixed. */
-/*
- * Fixed widths, so the four side cells line up between the padding row and the margin
- * row. Without that the eye has to re-find the columns on every row, which is most of
- * what makes a shorthand hard to read in the first place.
- */
-/*
- * A verdict is the one row here that is not neutral information — it is a pass or a
- * fail, and colouring it is the difference between reading the row and scanning past it.
- * Not derived from the accent: a red accent must not make a passing check look failed.
- */
+.measure-readout__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.measure-readout__dot--padding {
+  background: rgba(16, 185, 129, 0.9);
+}
+
+.measure-readout__dot--margin {
+  background: rgba(249, 115, 22, 0.9);
+}
+
 .measure-readout__row--pass {
   color: rgb(4, 150, 105);
 }

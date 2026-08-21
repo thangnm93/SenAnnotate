@@ -176,6 +176,10 @@ export interface StyleSummary {
   display: string;
   /** Empty when the corners are square. */
   radius: string;
+  /** Empty unless the element lays out with a gap that is actually in effect. */
+  gap: string;
+  boxSizing: string;
+  textAlign: string;
 }
 
 // -----------------------------------------------------------------------------

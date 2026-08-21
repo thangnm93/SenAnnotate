@@ -49,6 +49,11 @@ interface DrawnSides {
  */
 const LABEL_MIN_THICKNESS = 14;
 
+/** Kept between the panel and the viewport edge. */
+const EDGE = 8;
+/** `.measure-readout` in CSS; the fallback before the panel has been laid out. */
+const PANEL_WIDTH = 216;
+
 function strips(layer: HTMLElement, variant: "padding" | "margin"): Strips {
   const one = () =>
     h("div", { class: `measure-band measure-band--${variant}`, style: { display: "none" } });
@@ -170,7 +175,7 @@ export class MeasureOverlay {
   // Box model
   // ---------------------------------------------------------------------------
 
-  showBox(rect: Box, box: BoxModel, style: StyleSummary): void {
+  showBox(rect: Box, box: BoxModel, style: StyleSummary, label: string): void {
     // The readout dims whatever the bands managed to say for themselves, so it has to
     // run second and be told what they did.
     const drawn = {
@@ -179,7 +184,7 @@ export class MeasureOverlay {
     };
 
     this.paintEdges(rect, box);
-    this.paintReadout(rect, box, style, drawn);
+    this.paintReadout(rect, box, style, drawn, label);
 
     this.badge.style.display = "block";
     this.badge.textContent = box.scaled
@@ -241,64 +246,112 @@ export class MeasureOverlay {
    * "prefer, flip" the highlight label already does, for the same reason.
    */
   /**
-   * `padding` and `margin` are broken out per side rather than written as shorthand.
+   * A grouped inspector panel: a header naming the element, then Box Model, Appearance
+   * and Text.
    *
-   * A shorthand only reads if you already know its order, and half the point of this
-   * panel is the sides whose band was too thin to hold a figure — telling someone
-   * `8px 12px` and leaving them to work out which of the two unlabelled bands is which
-   * is not showing them the value. Sides the band *did* label are dimmed: they are
-   * already legible on the page, and repeating them at full weight buries the ones that
-   * are not.
+   * Grouped rather than a flat list, because a dozen `property: value` pairs in a column
+   * are read linearly and therefore not read at all — the headings let the eye jump to
+   * the third of it that matters. A row is emitted only when the property is in force: a
+   * `gap` on a non-flex element, or a zero border, is a line that costs attention and
+   * carries nothing.
    *
-   * `border` keeps its shorthand. It has no band of its own, so there is no thin-strip
-   * problem to solve, and it is very nearly always uniform.
+   * `padding` and `margin` keep their per-side treatment rather than the CSS shorthand
+   * the rest of the panel uses. A shorthand only reads if you already know its order,
+   * and the sides whose band was too thin to label are exactly what this panel exists to
+   * show. Sides the band did label are dimmed.
    */
   private paintReadout(
     rect: Box,
     box: BoxModel,
     style: StyleSummary,
     drawn: { padding: DrawnSides; margin: DrawnSides },
+    label: string,
   ): void {
     const rows: HTMLElement[] = [];
-
     const any = (sides: Sides) => sides.top || sides.right || sides.bottom || sides.left;
+
+    rows.push(h("div", { class: "measure-readout__head", text: label }));
+
+    rows.push(this.section("Box Model"));
+    rows.push(this.pair("width", `${box.width}px`));
+    rows.push(this.pair("height", `${box.height}px`));
+    rows.push(this.pair("display", style.display));
+    if (style.gap) rows.push(this.pair("gap", style.gap));
     if (any(box.padding)) rows.push(this.sideRow("padding", box.padding, drawn.padding));
     if (any(box.margin)) rows.push(this.sideRow("margin", box.margin, drawn.margin));
-    if (any(box.border)) rows.push(this.textRow(`border ${shorthand(box.border)}`));
+    if (any(box.border)) rows.push(this.pair("border", shorthand(box.border)));
+    rows.push(this.pair("box-sizing", style.boxSizing));
 
-    const line = style.lineHeight === "normal" ? "" : `/${style.lineHeight}`;
-    rows.push(this.textRow(`${style.fontSize}${line} ${style.fontFamily} ${style.fontWeight}`));
-
-    const on = style.backgroundIsImage
-      ? "image"
-      : style.backgroundInherited
-        ? `${style.background} (inherited)`
-        : style.background;
-    rows.push(this.textRow(`${style.color} on ${on}`));
-
-    // Its own row rather than tacked onto the colour line above: the pair of colours and
-    // the verdict on them are two facts, and one long line hides the second.
+    rows.push(this.section("Appearance"));
+    if (style.radius) rows.push(this.pair("border-radius", style.radius));
+    rows.push(this.pair("color", style.color, style.color));
+    rows.push(
+      this.pair(
+        "background",
+        style.backgroundIsImage
+          ? "image"
+          : style.backgroundInherited
+            ? `${style.background} (inherited)`
+            : style.background,
+        style.backgroundIsImage ? undefined : style.background,
+      ),
+    );
     if (style.contrast) {
       const verdict = style.contrast.aaa
         ? "passes AA and AAA"
         : style.contrast.aa
           ? "passes AA"
           : "fails AA";
-      const row = this.textRow(`${style.contrast.ratio}:1 · ${verdict}`);
-      row.classList.add(style.contrast.aa ? "measure-readout__row--pass" : "measure-readout__row--fail");
+      const row = this.pair("contrast", `${style.contrast.ratio}:1 ${verdict}`);
+      row.classList.add(
+        style.contrast.aa ? "measure-readout__row--pass" : "measure-readout__row--fail",
+      );
       rows.push(row);
     }
 
-    const shape = [style.display, style.radius && `radius ${style.radius}`].filter(Boolean);
-    rows.push(this.textRow(shape.join(" · ")));
+    rows.push(this.section("Text"));
+    rows.push(this.pair("font-family", style.fontFamily));
+    rows.push(this.pair("font-size", style.fontSize));
+    rows.push(this.pair("font-weight", style.fontWeight));
+    rows.push(this.pair("line-height", style.lineHeight));
+    rows.push(this.pair("text-align", style.textAlign));
 
     this.readout.replaceChildren(...rows);
 
+    // Measured after the rows are in: a panel whose contents have not been written yet
+    // reports the height it is about to lose — the same trap `SettingsCard.anchorTo`
+    // documents. Below the element by preference, above it when that does not fit, and
+    // pinned to the viewport when neither does. An unreadable panel helps nobody.
     this.readout.style.display = "block";
-    this.readout.style.left = `${Math.max(0, rect.left)}px`;
-    // Below the badge, which is itself below the box — unless neither fits.
+    const width = this.readout.offsetWidth || PANEL_WIDTH;
+    this.readout.style.left = `${Math.max(EDGE, Math.min(rect.left, window.innerWidth - width - EDGE))}px`;
+
+    const height = this.readout.offsetHeight;
     const below = rect.bottom + 24;
-    this.readout.style.top = `${below + 76 < window.innerHeight ? below : Math.max(0, rect.top - 96)}px`;
+    if (below + height + EDGE <= window.innerHeight) {
+      this.readout.style.top = `${below}px`;
+      return;
+    }
+    const above = rect.top - height - 8;
+    this.readout.style.top = `${above >= EDGE ? above : Math.max(EDGE, window.innerHeight - height - EDGE)}px`;
+  }
+
+  /** A heading inside the panel. */
+  private section(title: string): HTMLElement {
+    return h("div", { class: "measure-readout__section", text: title });
+  }
+
+  /** `property: value`, with an optional swatch when the value names a colour. */
+  private pair(name: string, value: string, swatch?: string): HTMLElement {
+    return h(
+      "div",
+      { class: "measure-readout__row" },
+      h("span", { class: "measure-readout__key", text: name }),
+      swatch && swatch !== "transparent"
+        ? h("span", { class: "measure-readout__swatch", style: { background: swatch } })
+        : null,
+      h("span", { class: "measure-readout__value", text: value }),
+    );
   }
 
   /** The border box shrunk by its own borders — where padding actually starts. */
@@ -422,10 +475,6 @@ export class MeasureOverlay {
     this.anchored = null;
   }
 
-  private textRow(text: string): HTMLElement {
-    return h("div", { class: "measure-readout__row" }, h("span", { text }));
-  }
-
   private sideRow(name: "padding" | "margin", sides: Sides, drawn: DrawnSides): HTMLElement {
     const cell = (initial: string, value: number, alreadyDrawn: boolean) =>
       h("span", {
@@ -437,7 +486,7 @@ export class MeasureOverlay {
       "div",
       { class: "measure-readout__row" },
       h("span", { class: `measure-readout__dot measure-readout__dot--${name}` }),
-      h("span", { class: "measure-readout__key", text: name }),
+      h("span", { class: "measure-readout__key measure-readout__key--side", text: name }),
       cell("T", sides.top, drawn.top),
       cell("R", sides.right, drawn.right),
       cell("B", sides.bottom, drawn.bottom),

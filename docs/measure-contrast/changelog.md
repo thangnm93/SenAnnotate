@@ -63,3 +63,55 @@ A red accent must not make a passing check look failed, so these two do not deri
 - `npm run typecheck` — clean.
 - `npm test` — **316/316** e2e, **9/9** upgrade.
 - The `hasOwnText` guard was verified by deleting it and watching the wrapper check fail.
+
+## The readout became a grouped inspector panel
+
+Asked for with a screenshot of a panel laid out in sections. The compact five-row readout
+is now a header naming the element in CSS terms — `div.card` — followed by **Box Model**,
+**Appearance** and **Text**, in `property: value` rows with a fixed value column and
+swatches on the colours.
+
+Three deliberate departures from the reference, each stated rather than silently taken:
+
+- **No close button.** The whole overlay is `pointer-events: none`, and letting the panel
+  take the pointer would make it swallow clicks on the page beneath — in mode 4, a click
+  is how you anchor an element. It follows the hover instead, so there is nothing to
+  close.
+- **`padding` and `margin` keep their per-side `T R B L` cells** rather than the CSS
+  shorthand the rest of the panel uses. The shorthand was explicitly rejected earlier in
+  this work: it only reads if you already know its order, and the sides whose band was
+  too thin to label are exactly what the panel exists to show.
+- **Rows are conditional.** No `gap` on a non-flex element, no `border` at zero, no
+  contrast where none can be taken honestly. A row that is always present and usually
+  empty trains the reader to skip the group.
+
+### The edit that went wrong twice, the same way
+
+Replacing `paintReadout` meant cutting one method out of a 560-line file. The first
+attempt sliced from the method's doc comment to the next member's header and swallowed
+`paintBand`, `paddingBox`, `showGap`, `hideGap` and `hideAll` — precisely the failure
+recorded in `docs/measure-core/changelog.md` about deleting code by index slicing.
+
+The second attempt used brace matching, which is the right idea and was still wrong: it
+took the **first** `{` after the doc comment, and this method's parameter list contains
+`{ padding: DrawnSides; margin: DrawnSides }`. Matching from that brace closed inside the
+signature, leaving the old body's tail behind and producing a syntax error 200 lines away
+from the actual damage.
+
+The working version anchors on `): void {` — the brace that opens the *body* — and the
+helper carries that reasoning in its docstring. Worth internalising: brace matching is
+only as good as the brace you start from, and a TypeScript parameter list is full of
+decoys.
+
+Diagnosing it also cost time because the first look was at `npm run typecheck | tail -4`.
+The last four errors were cascade noise 200 lines below the cause; the **first** error
+named the line. Read the first error.
+
+### Verification
+
+- `npm test` — **319/319** e2e, **9/9** upgrade, **52/52** unit.
+- Read off the built extension in a screenshot: header, three sections, both swatches,
+  the dimmed side cells, and no contrast row on an element with no text of its own.
+- Nine readout assertions were rewritten to read `key`/`value` spans rather than a row's
+  concatenated `textContent` — `background` and `#fffbe0` have no separator between them
+  in the DOM, which is the same trap the per-side cells sprang earlier.

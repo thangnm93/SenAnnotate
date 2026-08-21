@@ -744,9 +744,25 @@ async function main() {
       (await measure.locator(".measure-band-label:visible").allTextContents()).join(",") === "16",
       JSON.stringify(await measure.locator(".measure-band-label:visible").allTextContents()),
     );
-    const readout = (await measure.locator(".measure-readout__row").allTextContents()).map((r) =>
-      r.trim(),
-    );
+    // The panel is `key`/`value` spans now, so read the pairs rather than the row's
+    // concatenated text — `background` and `#fffbe0` have no separator between them in
+    // `textContent`.
+    const pairs = async () =>
+      measure.evaluate(() =>
+        Object.fromEntries(
+          [
+            ...document
+              .querySelector("[data-senannotate-ui]")
+              .shadowRoot.querySelectorAll(".measure-readout__row"),
+          ]
+            .map((row) => [
+              row.querySelector(".measure-readout__key")?.textContent?.trim(),
+              row.querySelector(".measure-readout__value")?.textContent?.trim(),
+            ])
+            .filter(([key]) => key),
+        ),
+      );
+    const readout = await pairs();
     // The cells are separate spans laid out by a flex gap, so the row's text content
     // runs them together — read the cells, not the row.
     const sideCells = (await measure.locator(".measure-readout__side").allTextContents()).map(
@@ -758,10 +774,20 @@ async function main() {
       JSON.stringify(sideCells),
     );
     check(
-      "each side row is keyed by its property",
-      (await measure.locator(".measure-readout__key").allTextContents()).join(",") ===
-        "padding,margin",
-      JSON.stringify(await measure.locator(".measure-readout__key").allTextContents()),
+      "the panel is grouped, not a flat list",
+      (await measure.locator(".measure-readout__section").allTextContents()).join(",") ===
+        "Box Model,Appearance,Text",
+      JSON.stringify(await measure.locator(".measure-readout__section").allTextContents()),
+    );
+    check(
+      "the panel header names the element in CSS terms",
+      ((await measure.locator(".measure-readout__head").textContent()) ?? "").trim() === "button#save",
+      (await measure.locator(".measure-readout__head").textContent()) ?? "",
+    );
+    check(
+      "the box model group reports the border box",
+      readout.width === "320px" && readout.height === "48px" && readout["box-sizing"] === "border-box",
+      JSON.stringify(readout),
     );
     // The dimming is the whole mechanism: full weight means "the page could not tell you
     // this". Only the 16px margin band was thick enough to label itself.
@@ -775,14 +801,19 @@ async function main() {
       ),
     );
     check(
-      "the readout names the type",
-      readout.some((row) => row.includes("system-ui")),
+      "the text group names the type",
+      readout["font-family"] === "system-ui" && readout["font-size"] === "14px",
       JSON.stringify(readout),
     );
     check(
-      "the readout resolves the colour it is painted on",
-      readout.includes("#ffffff on #2563eb"),
+      "the appearance group resolves the colour it is painted on",
+      readout.color === "#ffffff" && readout.background === "#2563eb",
       JSON.stringify(readout),
+    );
+    check(
+      "a colour row carries a swatch of that colour",
+      (await measure.locator(".measure-readout__swatch").count()) === 2,
+      String(await measure.locator(".measure-readout__swatch").count()),
     );
 
     // The other half of the pair. `getComputedStyle().width` reports the content box
@@ -798,40 +829,43 @@ async function main() {
     );
     check(
       "an element with no background of its own walks up to the one that is painted",
-      (await measure.locator(".measure-readout__row").allTextContents()).some((row) =>
-        row.includes("#000000 on #ffffff (inherited)"),
-      ),
-      JSON.stringify(await measure.locator(".measure-readout__row").allTextContents()),
+      (await pairs()).background === "#ffffff (inherited)",
+      JSON.stringify(await pairs()),
     );
     // --- contrast --------------------------------------------------------------
     //
     // #faint is the pair from the report that prompted this check. It lands at 4.49:1,
     // a hundredth under the AA bar, which is exactly the kind of call no reviewer makes
     // by eye.
-    const rowsFor = async (selector) => {
+    const contrastRow = async (selector) => {
       const target = await measure.locator(selector).boundingBox();
       await measure.mouse.move(target.x + 4, target.y + 4);
       await measure.mouse.move(target.x + target.width / 2, target.y + target.height / 2);
       await measure.waitForTimeout(120);
-      return measure.evaluate(() =>
-        [
+      return measure.evaluate(() => {
+        const row = [
           ...document
             .querySelector("[data-senannotate-ui]")
             .shadowRoot.querySelectorAll(".measure-readout__row"),
-        ].map((node) => `${node.className.replace("measure-readout__row", "").trim()}|${node.textContent.trim()}`),
-      );
+        ].find((node) => node.querySelector(".measure-readout__key")?.textContent === "contrast");
+        if (!row) return null;
+        return {
+          value: row.querySelector(".measure-readout__value").textContent.trim(),
+          verdict: row.className.replace("measure-readout__row", "").trim(),
+        };
+      });
     };
 
-    const faint = await rowsFor("#faint");
+    const faint = await contrastRow("#faint");
     check(
       "a failing pair is measured and called out",
-      faint.some((row) => row === "measure-readout__row--fail|4.49:1 · fails AA"),
+      faint?.value === "4.49:1 fails AA" && faint.verdict === "measure-readout__row--fail",
       JSON.stringify(faint),
     );
-    const strong = await rowsFor("#strong");
+    const strong = await contrastRow("#strong");
     check(
       "black on white is the maximum and passes both",
-      strong.some((row) => row === "measure-readout__row--pass|21:1 · passes AA and AAA"),
+      strong?.value === "21:1 passes AA and AAA" && strong.verdict === "measure-readout__row--pass",
       JSON.stringify(strong),
     );
 
@@ -842,18 +876,16 @@ async function main() {
     await measure.mouse.move(wrapper.x + wrapper.width / 2, wrapper.y + wrapper.height + 60);
     await measure.mouse.move(wrapper.x + wrapper.width - 8, wrapper.y + 6);
     await measure.waitForTimeout(120);
-    const wrapperRows = await measure.evaluate(() =>
-      [
-        ...document
-          .querySelector("[data-senannotate-ui]")
-          .shadowRoot.querySelectorAll(".measure-readout__row"),
-      ].map((node) => node.textContent.trim()),
-    );
+    const wrapperPairs = await pairs();
     check(
       "an element with no text of its own gets no verdict",
-      wrapperRows.some((row) => row.includes(" on ")) &&
-        !wrapperRows.some((row) => row.includes(":1")),
-      JSON.stringify(wrapperRows),
+      // Both colours are still reported — they are facts about the element. Only the
+      // verdict is withheld, because a ratio for text this element does not paint would
+      // describe nothing.
+      wrapperPairs.color === "#6c757d" &&
+        wrapperPairs.background === "#fffbe0" &&
+        wrapperPairs.contrast === undefined,
+      JSON.stringify(wrapperPairs),
     );
 
     await measure.mouse.move(...middleOf(save));

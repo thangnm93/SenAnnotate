@@ -626,7 +626,12 @@ function drawMeasure(element: Element): void {
   // the style recalculation, and this runs at pointermove frequency.
   const style = getComputedStyle(element);
   const rect = element.getBoundingClientRect();
-  measureOverlay.showBox(rect, readBoxModel(element, style), readStyleSummary(element, style));
+  measureOverlay.showBox(
+    rect,
+    readBoxModel(element, style),
+    readStyleSummary(element, style),
+    elementTag(element),
+  );
 
   const anchor = measureOverlay.anchor;
   if (!anchor || anchor === element) {
@@ -635,6 +640,20 @@ function drawMeasure(element: Element): void {
   }
   const anchorRect = anchor.getBoundingClientRect();
   measureOverlay.showGap(anchorRect, rect, measureGap(anchorRect, rect));
+}
+
+/**
+ * `div.card`, for the panel's header.
+ *
+ * Deliberately not `identifyElement().name` — that is the human-readable name, and the
+ * hover highlight is already showing it directly above the box. This is the CSS-shaped
+ * descriptor, which is the language the rest of the panel is written in.
+ */
+function elementTag(element: Element): string {
+  const tag = element.tagName.toLowerCase();
+  if (element.id) return `${tag}#${element.id}`;
+  const first = element.classList[0];
+  return first ? `${tag}.${first}` : tag;
 }
 
 /**

@@ -193,9 +193,14 @@ things?* Hover reads, click writes — the same contract as mode 1.
 | A dashed green line | Where the padding ends and the content begins |
 | A dashed orange line | The outer edge of the margin |
 | A contrast verdict, green or red | The WCAG ratio for this element's own text, and whether it clears AA and AAA |
-| The readout under the badge | `padding` and `margin` **side by side** — `T R B L`, each with a dot matching its band's colour — then the type, the colour the element is painted on, and `display` / `border-radius` |
+| The panel under the badge | A grouped inspector: the element in CSS terms, then **Box Model**, **Appearance** and **Text** |
 
-A side whose figure is already drawn on its band is **dimmed** in the readout. What stays
+The panel reads as CSS because that is what you are about to go and write — a panel that
+renames things makes you translate twice. Rows appear only when the property is in force:
+no `gap` row on something that is not a flex or grid container, no `border` row at zero.
+
+`padding` and `margin` keep their per-side `T R B L` form rather than the shorthand the
+other rows use. A side whose figure is already drawn on its band is **dimmed**. What stays
 at full weight is exactly what the page could not tell you — the bands too thin to hold a
 number. That is why the sides are spelled out rather than written as a shorthand: being
 told `8px 12px` and left to work out which of two unlabelled bands is which is not being

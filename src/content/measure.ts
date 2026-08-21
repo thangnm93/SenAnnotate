@@ -312,6 +312,12 @@ export function readStyleSummary(
   const family = style.fontFamily.split(",")[0].replace(/["']/g, "").trim();
   const radius = style.borderRadius;
 
+  // `gap` computes to `normal` on everything that is not a flex or grid container, and
+  // reporting it there would be reporting a property with no effect — the panel's job is
+  // what is in force, not what the cascade happens to hold.
+  const laysOut = style.display.includes("flex") || style.display.includes("grid");
+  const gap = laysOut && style.gap && style.gap !== "normal" && style.gap !== "0px" ? style.gap : "";
+
   // Withheld rather than guessed at whenever it cannot be taken honestly: no text of its
   // own, nothing painted behind it, an image behind it, or a colour we could not parse.
   const foreground = parseRgb(style.color);
@@ -337,5 +343,8 @@ export function readStyleSummary(
     contrast,
     display: style.display,
     radius: radius === "0px" ? "" : radius,
+    gap,
+    boxSizing: style.boxSizing,
+    textAlign: style.textAlign,
   };
 }
