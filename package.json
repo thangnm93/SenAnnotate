@@ -1,6 +1,6 @@
 {
   "name": "senannotate",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "private": true,
   "description": "Chrome extension: click any element on any website, annotate it, and hand an AI coding agent the exact element, DOM path and diagnostics. Adds Vue component and source data when the page is a Vue app.",
   "type": "module",
