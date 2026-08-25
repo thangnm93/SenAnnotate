@@ -205,3 +205,11 @@ attribute-restore, the priority and the unrepresentable colour at once.
 Still not covered: the alpha-colour path through `diffDesign` (the swatch has to be driven and
 the report re-copied, which needs a second annotation and would disturb the entry order the
 block's later assertions depend on).
+
+## After share-export landed
+
+`#13` merged first, so the shared `.html` review had nothing to print for a design delta.
+`share.ts` now renders the same property table (and the text swap) under the photograph —
+the order the Markdown report already uses, because the numbers are what to do and the
+picture is what they are changing. Values go through the existing `html` tagged template;
+nothing here is a new sink.
