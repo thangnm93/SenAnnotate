@@ -35,8 +35,8 @@ That is its only function. It injects no script or stylesheet into the pages it 
 leaves no change behind: its own interface lives in a shadow root, and the optional design
 preview — trying a colour or a size on the element while writing the note — is an inline style
 undone the moment the annotation card closes, on save as well as on cancel. It has no server:
-everything it produces stays on the user's device until the user copies the report or saves a
-screenshot.
+everything it produces stays on the user's device until the user copies the report, saves a
+screenshot, or saves the notes as a file.
 ```
 
 ---
@@ -95,8 +95,9 @@ and credential-like query parameters are redacted. The page's DOM is read in det
 the user turns inspect mode on and clicks an element. The only thing ever written to a page is
 the optional design preview inside the annotation card — an inline style on the one element
 being annotated, put back exactly as found when the card closes; no script or stylesheet is
-injected anywhere. The extension makes no network request of its own, so nothing from any page
-ever leaves the browser.
+injected anywhere. The extension makes no network request of its own, so nothing from any
+page is transmitted anywhere; the notes go to the user's own disk only when the user saves
+them as a file.
 ```
 
 ---

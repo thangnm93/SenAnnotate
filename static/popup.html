@@ -340,9 +340,32 @@
       <button class="link" id="import">Import</button>
     </div>
     <input type="file" id="import-file" accept="application/json,.json" hidden />
+    <div class="field">
+      <label for="import-remap">Import onto this site</label>
+      <input type="checkbox" id="import-remap" />
+    </div>
+    <!--
+      Its own paragraph, with no id: `#archive-hint` below is the status line every Export
+      and Import overwrites, and the only statement of what this checkbox does must not
+      disappear the first time one of them reports something.
+    -->
+    <p class="hint">
+      Notes are filed under the site they were taken on, so a review captured elsewhere
+      lands where nothing opens it. Tick this to move every page in the file onto the site
+      in the current tab, keeping each path.
+    </p>
     <p class="hint" id="archive-hint">
       Every page's notes as one JSON file — a backup before <em>Clear all</em>, or a
       review handed to someone else. Import merges; it never replaces what is there.
+    </p>
+
+    <div class="field">
+      <label>Share a review</label>
+      <button class="link" id="share">Save .html</button>
+    </div>
+    <p class="hint">
+      One page with every note and every embedded screenshot, for someone without the
+      extension. Screenshots only travel when <em>Screenshots</em> is set to embed.
     </p>
 
     <footer>

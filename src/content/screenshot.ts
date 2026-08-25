@@ -98,30 +98,9 @@ export function encodeForEmbed(canvas: HTMLCanvasElement): string | null {
   }
 }
 
-/**
- * Save a blob to the user's downloads.
- *
- * An anchor with `download`, deliberately — `chrome.downloads` would work but costs
- * the `downloads` permission, and `test/e2e.mjs` asserts we save a screenshot
- * without one. Do not "simplify" this to the extension API.
- */
-export function downloadBlob(blob: Blob, filename: string): boolean {
-  try {
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.style.display = "none";
-    document.body.append(anchor);
-    anchor.click();
-    anchor.remove();
-    // Revoking immediately can cancel the download in some Chrome builds.
-    window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
-    return true;
-  } catch {
-    return false;
-  }
-}
+// `downloadBlob` used to live here. It moved to `shared/download.ts` when the popup grew
+// downloads of its own — `popup/` may not import from `content/`, and one delivery path
+// with the attach-click-detach dance in it beats two that drift.
 
 /**
  * Where the file most likely landed.
