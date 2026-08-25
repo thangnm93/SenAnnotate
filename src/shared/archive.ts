@@ -36,11 +36,40 @@ export interface ExportFile {
   docks?: { page: string; position: { x: number; y: number } }[];
 }
 
+/**
+ * Notes across a set of pages.
+ *
+ * Every surface that reports a number reports this one — the popup's export line, its
+ * session copy, and the shared HTML document's title. They were three identical reduces
+ * that could drift apart; `unknown[]` because the callers hold three different shapes of
+ * annotation and none of them needs to be read to be counted.
+ */
+export function countNotes(pages: { annotations: unknown[] }[]): number {
+  return pages.reduce((total, entry) => total + entry.annotations.length, 0);
+}
+
 export interface ImportSummary {
+  /** Distinct page keys written, which after a remap is fewer than the entries read. */
   pages: number;
   annotations: number;
   /** Entries dropped for failing the shape check. */
   skipped: number;
+  /** Pages whose origin was rewritten on the way in. */
+  remapped: number;
+}
+
+export interface ImportOptions {
+  /**
+   * Rewrite every page's origin to this one — `https://shop.example` becomes
+   * `http://localhost:3000`, path kept.
+   *
+   * Annotations are keyed on `origin + pathname`, which is right while one person
+   * reviews one deployment and wrong the moment the file crosses a machine: a review
+   * captured on staging imports into a key nobody's dev server will ever open, and
+   * the notes look like they were lost. The paths are the part that survives the
+   * move, so only the origin is replaced.
+   */
+  remapOrigin?: string;
 }
 
 /** The pair of finite numbers a stored dock position has to be to be worth carrying. */
@@ -122,24 +151,54 @@ function looksLikeAnnotation(value: unknown): value is Annotation {
 }
 
 /**
+ * Move a stored page key onto another origin, keeping its path.
+ *
+ * A key that will not parse as a URL is left exactly as it is: it came from a scheme
+ * this build does not know about, and guessing where its path starts would be worse
+ * than importing it where it was.
+ */
+function remap(page: string, origin: string | undefined): string {
+  if (!origin) return page;
+  try {
+    const url = new URL(page);
+    return `${origin}${url.pathname}`;
+  } catch {
+    return page;
+  }
+}
+
+/**
  * Merge an export back in.
  *
  * Merge, never replace: importing the wrong file should not be able to destroy a
  * review in progress. Where an id exists on both sides the imported copy wins —
  * that file is what the user just asked for.
  */
-export async function importAll(data: unknown): Promise<ImportSummary | null> {
+export async function importAll(
+  data: unknown,
+  options: ImportOptions = {},
+): Promise<ImportSummary | null> {
   if (typeof data !== "object" || data === null) return null;
   const file = data as Partial<ExportFile>;
   if (file.format !== EXPORT_FORMAT || !Array.isArray(file.pages)) return null;
 
-  const summary: ImportSummary = { pages: 0, annotations: 0, skipped: 0 };
+  const summary: ImportSummary = { pages: 0, annotations: 0, skipped: 0, remapped: 0 };
+  // Counted as a set of keys, not as a count of entries read: a remap can send
+  // `https://staging.example/checkout` and `https://prod.example/checkout` to the same
+  // `http://localhost:3000/checkout`, and "across 2 pages" would then describe a file
+  // rather than this browser. The merge itself is already right — the awaits are
+  // sequential, so the second pass reads what the first wrote — but two captures
+  // interleaving on one screen is exactly the fact the user needs told.
+  const written = new Set<string>();
 
   for (const entry of file.pages) {
     if (!entry || typeof entry.page !== "string" || !Array.isArray(entry.annotations)) {
       summary.skipped += 1;
       continue;
     }
+
+    const page = remap(entry.page, options.remapOrigin);
+    if (page !== entry.page) summary.remapped += 1;
 
     const incoming = entry.annotations.filter((annotation) => {
       const ok = looksLikeAnnotation(annotation);
@@ -148,7 +207,7 @@ export async function importAll(data: unknown): Promise<ImportSummary | null> {
     });
     if (!incoming.length) continue;
 
-    const key = `${ANNOTATION_PREFIX}${entry.page}`;
+    const key = `${ANNOTATION_PREFIX}${page}`;
     const stored = await chrome.storage.local.get(key);
     const existing = Array.isArray(stored[key]) ? (stored[key] as Annotation[]) : [];
 
@@ -156,7 +215,8 @@ export async function importAll(data: unknown): Promise<ImportSummary | null> {
     for (const annotation of incoming) byId.set(annotation.id, annotation);
 
     await chrome.storage.local.set({ [key]: [...byId.values()] });
-    summary.pages += 1;
+    written.add(key);
+    summary.pages = written.size;
     summary.annotations += incoming.length;
   }
 

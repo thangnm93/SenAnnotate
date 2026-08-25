@@ -6,7 +6,8 @@ Last updated: 11 August 2026. Applies to the SenAnnotate Chrome extension.
 
 **SenAnnotate has no server and makes no network requests of its own.** Nothing it reads,
 records or produces is transmitted anywhere. Everything stays in your browser, on your
-machine, until you copy a report or save a screenshot yourself.
+machine, until you copy a report, save a screenshot, or save a file yourself — and a file
+you saved is a file on your disk, which the extension has no way to send anywhere.
 
 There is no account, no analytics, no telemetry, no crash reporting, and no advertising or
 tracking code of any kind. The extension bundles all of its code; it loads nothing from a
@@ -72,6 +73,25 @@ If you click the camera button on an annotation, the extension photographs the v
 of the current tab, crops it to the annotated element in the page, and hands the result to
 Chrome's normal download flow. The image is not uploaded anywhere. No capture ever happens
 without that click.
+
+### Files you choose to save
+
+Three things leave the extension, all of them only when you press the button that produces
+them, and all of them through Chrome's ordinary download flow to your own disk:
+
+- **Export** — every page's notes as one `.json` file, for a backup or another copy of this
+  extension. **Import** reads such a file back and merges it; ticking *Import onto this site*
+  refiles the notes under the site open in the current tab, since notes are stored per site.
+- **Save .html** — the same notes as one self-contained document for someone who does not
+  have the extension. If your screenshots are set to be embedded, they are inside that file
+  as image data. It contains no script and loads nothing from the network, and it says so
+  in its own content security policy.
+- **Download report** — the Markdown report as an `.md` file.
+
+Each contains exactly what is described above under *Saved on your device*: your notes and
+the descriptions of the elements you annotated, for the pages you annotated them on. Where
+that file then goes is your decision — the extension has no server and cannot send it
+anywhere.
 
 ## What the extension does not do
 
