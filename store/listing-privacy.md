@@ -31,10 +31,9 @@ selector, and, on pages built with Vue, React, Svelte or Angular, the component 
 source file the framework itself reports — so the note can be handed to an AI coding
 assistant or a colleague without anyone guessing which element was meant.
 
-That is its only function. It injects no script or stylesheet into the pages it inspects and
-leaves no change behind: its own interface lives in a shadow root, and the optional design
-preview — trying a colour or a size on the element while writing the note — is an inline style
-undone the moment the annotation card closes, on save as well as on cancel. It has no server:
+That is its only function. Its interface lives in a shadow root. The optional design
+preview — trying a colour or a size on the element while writing the note — is an inline
+style undone when the card closes, on save as well as on cancel. It has no server:
 everything it produces stays on the user's device until the user copies the report, saves a
 screenshot, or saves the notes as a file.
 ```
@@ -84,20 +83,16 @@ user pressing Copy, only to write, and the extension never reads the clipboard.
 ### Host permission (`<all_urls>`)
 
 ```
-The extension annotates whichever page the user is already reviewing, and that can be any URL
-— a localhost dev server, a staging host, or production — so it cannot know the hosts in
-advance and declares its two content scripts for <all_urls>. What runs on every page is small
-and local: a floating toolbar inside a shadow root, and a capped in-memory record of console
-errors, failed requests and coarse interaction steps, which exists so a bug report can say
-what led to the problem. That record holds at most 60 entries of each kind, is never written
-to disk, and is discarded when the page reloads. Values typed into fields are never recorded
-and credential-like query parameters are redacted. The page's DOM is read in detail only when
-the user turns inspect mode on and clicks an element. The only thing ever written to a page is
-the optional design preview inside the annotation card — an inline style on the one element
-being annotated, put back exactly as found when the card closes; no script or stylesheet is
-injected anywhere. The extension makes no network request of its own, so nothing from any
-page is transmitted anywhere; the notes go to the user's own disk only when the user saves
-them as a file.
+The extension annotates whichever page the user is already reviewing — localhost, staging or
+production — so it cannot know the hosts in advance and declares its two content scripts for
+<all_urls>. What runs on every page is small and local: a floating toolbar in a shadow root,
+and a capped in-memory record of console errors, failed requests and coarse interaction
+steps (at most 60 of each kind), discarded on reload, never written to disk. Field values
+are never recorded and credential-like query parameters are redacted. The page's DOM is
+read in detail only when the user turns inspect mode on and clicks an element. The only
+write to a page is the optional design preview — an inline style on the annotated element,
+put back exactly as found when the card closes. The extension makes no network request of
+its own; notes go to the user's own disk only when the user saves them as a file.
 ```
 
 ---
