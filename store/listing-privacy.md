@@ -31,10 +31,11 @@ selector, and, on pages built with Vue, React, Svelte or Angular, the component 
 source file the framework itself reports — so the note can be handed to an AI coding
 assistant or a colleague without anyone guessing which element was meant.
 
-That is its only function. It does not modify, block or inject anything into the pages it
-inspects beyond its own floating toolbar, and it has no server: everything it produces stays
-on the user's device until the user copies the report, saves a screenshot, or saves the notes
-as a file.
+That is its only function. Its interface lives in a shadow root. The optional design
+preview — trying a colour or a size on the element while writing the note — is an inline
+style undone when the card closes, on save as well as on cancel. It has no server:
+everything it produces stays on the user's device until the user copies the report, saves a
+screenshot, or saves the notes as a file.
 ```
 
 ---
@@ -45,9 +46,11 @@ as a file.
 
 ```
 Two local stores, both via chrome.storage. (1) chrome.storage.local holds the user's
-annotations — the note text plus a description of the annotated element, its DOM ancestry and
-a re-resolvable CSS selector — keyed by the page's origin and path, so that reloading the page
-under review brings the notes back instead of silently losing the user's work. (2)
+annotations — the note text, a description of the annotated element, its DOM ancestry and a
+re-resolvable CSS selector, and, when the user tried a style change on the element, the CSS
+properties they adjusted with the before and after values — keyed by the page's origin and
+path, so that reloading the page under review brings the notes back instead of silently losing
+the user's work. (2)
 chrome.storage.sync holds preferences only: report detail level, theme, whether diagnostics
 capture is enabled, and whether the toolbar is collapsed, so they follow the user's Chrome
 profile between machines. Annotation content is never written to sync storage. Nothing in
@@ -80,17 +83,16 @@ user pressing Copy, only to write, and the extension never reads the clipboard.
 ### Host permission (`<all_urls>`)
 
 ```
-The extension annotates whichever page the user is already reviewing, and that can be any URL
-— a localhost dev server, a staging host, or production — so it cannot know the hosts in
-advance and declares its two content scripts for <all_urls>. What runs on every page is small
-and local: a floating toolbar inside a shadow root, and a capped in-memory record of console
-errors, failed requests and coarse interaction steps, which exists so a bug report can say
-what led to the problem. That record holds at most 60 entries of each kind, is never written
-to disk, and is discarded when the page reloads. Values typed into fields are never recorded
-and credential-like query parameters are redacted. The page's DOM is read in detail only when
-the user turns inspect mode on and clicks an element. The extension makes no network request
-of its own, so nothing from any page is transmitted anywhere; the notes go to the user's own
-disk only when the user saves them as a file.
+The extension annotates whichever page the user is already reviewing — localhost, staging or
+production — so it cannot know the hosts in advance and declares its two content scripts for
+<all_urls>. What runs on every page is small and local: a floating toolbar in a shadow root,
+and a capped in-memory record of console errors, failed requests and coarse interaction
+steps (at most 60 of each kind), discarded on reload, never written to disk. Field values
+are never recorded and credential-like query parameters are redacted. The page's DOM is
+read in detail only when the user turns inspect mode on and clicks an element. The only
+write to a page is the optional design preview — an inline style on the annotated element,
+put back exactly as found when the card closes. The extension makes no network request of
+its own; notes go to the user's own disk only when the user saves them as a file.
 ```
 
 ---
@@ -120,7 +122,7 @@ extension has no runtime dependencies at all.
 | Location | ☐ no | Not touched. |
 | **Web history** | ☑ **yes** | Annotations are stored keyed by the page's origin and path, and the in-memory step trail records navigations as paths. Narrow and local, but a reviewer reading the code will see it — disclose it. |
 | **User activity** | ☑ **yes** | The step trail records that a button was clicked, a field edited, a form submitted, a page navigated. Never what was typed. |
-| **Website content** | ☑ **yes** | The core function: element text, accessible name, classes, computed styles, nearby text and DOM path of the element the user annotates. |
+| **Website content** | ☑ **yes** | The core function: element text, accessible name, classes, computed styles, nearby text and DOM path of the element the user annotates — plus, when the user tried a style change on it, the computed values they changed away from. |
 
 ### The three certifications — all true, tick all three
 
@@ -141,6 +143,15 @@ https://github.com/thangnm93/SenAnnotate/blob/main/PRIVACY.md
 `PRIVACY.md` is in the repo root. The repository is public, so the URL is publicly reachable
 as Google requires — but **the file has to be pushed before you paste the URL**, or the
 reviewer gets a 404.
+
+---
+
+## Design edits add no permission
+
+Worth stating, because "it can restyle the page" reads like it should need one. The preview is
+an inline style set from the content script that is already declared for `<all_urls>` — the
+same script that draws the toolbar — so there is no new API, no `scripting` call, and no new
+field on this form. Nothing below changes for it.
 
 ---
 

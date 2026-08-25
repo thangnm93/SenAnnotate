@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Design edits fixture</title>
+    <style>
+      body { margin: 0; font: 14px/1.4 system-ui, sans-serif; padding: 20px; }
+      /* Explicit values, so the assertions can name what they expect `from` to be
+         rather than depending on a UA default that varies by platform. */
+      .tile { padding: 12px; background: rgb(255, 255, 255); color: rgb(0, 0, 0); }
+      .cta { font-size: 16px; padding: 8px; background: rgb(219, 234, 254); border: 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Design edits fixture</h1>
+    <div class="tile">
+      <!-- A single text node: the only shape whose text may be replaced. -->
+      <button class="cta">Upgrade plan</button>
+    </div>
+    <!--
+      Styling the revert has to hand back and cannot have snapshotted per property: a
+      partial inline longhand, which clearing the `padding` shorthand would delete, and an
+      inline `!important`, which `getPropertyValue` does not carry. It also has no
+      background of its own, so `background-color` computes to `rgba(0, 0, 0, 0)` — the
+      colour a `#rrggbb` swatch cannot hold.
+    -->
+    <p class="keep" style="padding-left: 10px; color: red !important">Keep my inline style</p>
+  </body>
+</html>

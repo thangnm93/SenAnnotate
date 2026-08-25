@@ -148,6 +148,7 @@ the line and column.
 | Annotate some text | mode <kbd>2</kbd>, then select the text |
 | Annotate several elements near each other | <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+drag a box around them — or mode <kbd>3</kbd> and drag |
 | Annotate several elements anywhere | <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+click each one, then click the last normally — or <kbd>Enter</kbd> |
+| Try a style change on the element | **Design** in the composer — previewed live, never kept |
 | Measure the gap between two elements | switch on **Measuring tools** in settings, then mode <kbd>4</kbd>: click one, then the other |
 | See an element's size, padding, margin, type and colours | **Box model on hover** in settings — or just enter mode <kbd>4</kbd> |
 | Check a contrast ratio | hover anything with text once measuring is on — the verdict is on the panel and in the report |
@@ -295,6 +296,12 @@ every note and every screenshot embedded, no script and nothing loaded from the 
 a content security policy inside the file says so, so the recipient's browser enforces it
 rather than taking our word — which opens in any browser. Screenshots only travel when **Screenshots** is set to embed —
 a path points at *your* Downloads folder, not theirs.
+
+The composer's **Design** section is for the note you cannot write: open it and try the
+change on the real element — colour, size, spacing, layout, or the text itself. Nothing is
+kept on the page; the preview is undone the moment the composer closes, saving included.
+What reaches the report is the delta, `padding: 8px → 20px`, with a line asking your agent
+to express it in your own tokens rather than pasting the numbers.
 
 ## Screenshots
 
