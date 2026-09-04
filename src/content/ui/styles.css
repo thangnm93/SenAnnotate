@@ -1220,6 +1220,40 @@ button {
   max-width: calc(100vw - 24px);
 }
 
+/*
+ * The card header is the drag handle. `.icon-button` (the cancel ×) is a
+ * `<button>` and gets `cursor: pointer` from the browser's UA sheet — a direct
+ * match beats the inherited `grab` — so it is listed separately to override.
+ * `touch-action: none` is required for pen and touch: without it the browser
+ * claims the gesture for panning and answers `pointercancel`, killing the drag.
+ */
+.composer .card__header {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.composer .card__header .icon-button {
+  cursor: grab;
+}
+
+/*
+ * Hold `cursor: grabbing` on the whole card during a drag. The pointer outruns
+ * the card on fast moves and a cursor that reverts to the default mid-gesture
+ * reads as the drag having been dropped.
+ */
+.composer[data-dragging="true"],
+.composer[data-dragging="true"] .card__header,
+.composer[data-dragging="true"] .card__header .icon-button {
+  cursor: grabbing;
+}
+
+/* Suppress the card's `transition` while actively dragging — animated position
+   updates at 60 fps feel like lag. */
+.composer[data-dragging="true"] {
+  transition: none !important;
+}
+
 .composer__meta {
   display: flex;
   flex-direction: column;

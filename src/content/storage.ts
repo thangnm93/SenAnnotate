@@ -10,7 +10,7 @@
 // annotations stay in `local`, which has room for them.
 // =============================================================================
 
-import { ANNOTATION_PREFIX, DOCK_PREFIX, SETTINGS_KEY } from "../shared/protocol";
+import { ANNOTATION_PREFIX, COMPOSER_DOCK_PREFIX, DOCK_PREFIX, SETTINGS_KEY } from "../shared/protocol";
 import { DEFAULT_SETTINGS, type Annotation, type Settings } from "../shared/types";
 
 export function pageKey(): string {
@@ -131,6 +131,45 @@ export async function saveDockPosition(position: { x: number; y: number }): Prom
     await chrome.storage.local.set({ [dockKey()]: position });
   } catch {
     // Over quota, or the extension context went away mid-drag. The pill is already
+    // where it was dropped; only remembering it across a reload is lost.
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Composer position
+// -----------------------------------------------------------------------------
+//
+// Mirrors the toolbar dock persistence pattern exactly. The composer card opens
+// near its target element by default; once the user has dragged it somewhere,
+// that position is remembered for the rest of the session on this page so that
+// every subsequent composer opens in the same spot rather than jumping around.
+//
+// Keyed on `origin + pathname` for the same reasons as the toolbar — layout
+// choices are per-screen, not per-user, and the query string is the same screen.
+
+export function composerDockKey(): string {
+  return `${COMPOSER_DOCK_PREFIX}${location.origin}${location.pathname}`;
+}
+
+export async function loadComposerPosition(): Promise<{ x: number; y: number } | null> {
+  try {
+    const key = composerDockKey();
+    const stored = (await chrome.storage.local.get(key))[key];
+    if (typeof stored !== "object" || stored === null) return null;
+
+    const { x, y } = stored as { x?: unknown; y?: unknown };
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return { x: x as number, y: y as number };
+  } catch {
+    return null;
+  }
+}
+
+export async function saveComposerPosition(position: { x: number; y: number }): Promise<void> {
+  try {
+    await chrome.storage.local.set({ [composerDockKey()]: position });
+  } catch {
+    // Over quota, or the extension context went away mid-drag. The card is already
     // where it was dropped; only remembering it across a reload is lost.
   }
 }

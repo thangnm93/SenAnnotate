@@ -1,6 +1,17 @@
 // =============================================================================
 // Composer — the popup you type the annotation into
 // =============================================================================
+//
+// The card header doubles as a drag handle. The rest of the card — textarea,
+// kind chips, footer buttons — must all keep working normally, so the drag is
+// confined to `.card__header` rather than the whole card. A 4px movement
+// threshold keeps a header click from starting a drag.
+//
+// `applyPosition` is called after construction (with the saved position, if any)
+// and on every viewport resize, following the same pattern as `Toolbar`. If no
+// saved position exists the `position()` method anchors the card near its
+// target element as before, so the default experience is unchanged.
+// =============================================================================
 
 import { ANNOTATION_KINDS, type AnnotationKind } from "../../shared/types";
 import { h, icon, listen, takeFocus } from "./dom";
@@ -40,6 +51,11 @@ export interface ComposerCallbacks {
   onDelete?(): void;
   /** Absent when retargeting does not apply — a saved note, text, or a multi-select. */
   onRetarget?(direction: RetargetDirection): void;
+  /**
+   * Fired once, on drop — not per frame. The caller persists and re-applies the
+   * position so every subsequent composer on this page opens in the same spot.
+   */
+  onMove(position: { x: number; y: number }): void;
 }
 
 const WIDTH = 380;
@@ -58,6 +74,14 @@ const RETARGET_CONTROLS: {
   { direction: "next", key: "ArrowRight", glyph: "→", title: "Next sibling (→)" },
 ];
 
+/**
+ * How far the pointer must travel before a header press becomes a drag.
+ *
+ * Matches the toolbar threshold: 4px combined travel is the platform convention
+ * and is what a trackpad tap stays inside.
+ */
+const DRAG_THRESHOLD = 4;
+
 export class Composer {
   readonly element: HTMLElement;
   private readonly textarea: HTMLTextAreaElement;
@@ -73,6 +97,17 @@ export class Composer {
    * was shorter.
    */
   private readonly anchor: { left: number; top: number; right: number; bottom: number };
+  /**
+   * The point last *asked* for, before clamping. `null` means "use the anchor".
+   *
+   * Re-clamping (on resize) starts from the request rather than from the clamped
+   * result, so a spell in a narrow window never permanently walks the card to the
+   * left edge.
+   */
+  private requested: { x: number; y: number } | null = null;
+  /** Card size, measured once at the start of a drag. `null` outside one. */
+  private dragSize: { width: number; height: number } | null = null;
+  private readonly resizeObserver: ResizeObserver;
 
   constructor(
     layer: HTMLElement,
@@ -147,24 +182,27 @@ export class Composer {
       submit,
     );
 
+    // Keep `header` as a local variable so `installDrag` can attach listeners to it.
+    const header = h(
+      "div",
+      { class: "card__header" },
+      icon("pencil", 14),
+      h("span", { class: "card__title", text: "Annotation" }),
+      h(
+        "button",
+        {
+          class: "icon-button",
+          title: "Cancel (Esc)",
+          on: { click: () => this.callbacks.onCancel() },
+        },
+        icon("close", 14),
+      ),
+    );
+
     this.element = h(
       "div",
       { class: "card composer" },
-      h(
-        "div",
-        { class: "card__header" },
-        icon("pencil", 14),
-        h("span", { class: "card__title", text: "Annotation" }),
-        h(
-          "button",
-          {
-            class: "icon-button",
-            title: "Cancel (Esc)",
-            on: { click: () => this.callbacks.onCancel() },
-          },
-          icon("close", 14),
-        ),
-      ),
+      header,
       h("div", { class: "card__body" }, this.meta, kinds, this.textarea),
       footer,
     );
@@ -234,12 +272,189 @@ export class Composer {
       this.teardown.push(listen(this.element, type, (event) => event.stopPropagation()));
     }
 
+    this.installDrag(header);
+
+    // Re-clamp on card size changes (content reflowing as meta rows appear, etc.)
+    // without waiting for a viewport resize.
+    this.resizeObserver = new ResizeObserver(() => this.paintPosition());
+    this.resizeObserver.observe(this.element);
+
     takeFocus(this.textarea);
   }
 
   /** Put the caret back after something else — the markup editor — borrowed focus. */
   focus(): void {
     takeFocus(this.textarea);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Dragging — header-only handle
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Install a drag on the card header.
+   *
+   * The whole header is the handle, not a dedicated grip: the header has room and
+   * already looks like chrome. The textarea must NOT be the handle — dragging would
+   * select text rather than moving the card. Kind chips and the cancel button are
+   * inside the header; a 4px threshold separates their clicks from a drag, following
+   * the same reasoning as `docs/draggable-toolbar/context.md`.
+   *
+   * Pointer events rather than mouse events for `setPointerCapture`, so a fast drag
+   * that outruns the card still delivers its moves to the header.
+   */
+  private installDrag(header: HTMLElement): void {
+    let origin: { x: number; y: number } | null = null;
+    let grab = { dx: 0, dy: 0 };
+    let moved = false;
+
+    const forget = () => {
+      origin = null;
+      this.dragSize = null;
+    };
+
+    this.teardown.push(
+      listen(header, "pointerdown", (event) => {
+        const pe = event as PointerEvent;
+        if (pe.button !== 0) return;
+
+        const box = this.element.getBoundingClientRect();
+        origin = { x: pe.clientX, y: pe.clientY };
+        grab = { dx: pe.clientX - box.left, dy: pe.clientY - box.top };
+        // Measured once per drag — re-reading per frame is a forced layout at
+        // pointer frequency and the size does not change while dragging.
+        this.dragSize = { width: box.width, height: box.height };
+        moved = false;
+      }),
+    );
+
+    this.teardown.push(
+      listen(header, "pointermove", (event) => {
+        const pe = event as PointerEvent;
+        if (!origin) return;
+
+        // A press released within 4px of the header — pointer off before travelling
+        // far enough — never reaches the end handler and leaves `origin` set. A later
+        // plain *hover* would then cross the threshold with no button held and drag the
+        // card. `buttons` is the only reliable witness that the press is over.
+        if (pe.buttons === 0) {
+          forget();
+          return;
+        }
+
+        if (!moved) {
+          const travelled =
+            Math.abs(pe.clientX - origin.x) + Math.abs(pe.clientY - origin.y);
+          if (travelled < DRAG_THRESHOLD) return;
+          moved = true;
+          this.element.dataset.dragging = "true";
+          try {
+            header.setPointerCapture(pe.pointerId);
+          } catch {
+            /* keep dragging uncaptured */
+          }
+        }
+
+        this.moveTo(pe.clientX - grab.dx, pe.clientY - grab.dy);
+      }),
+    );
+
+    const end = (event: Event) => {
+      const pe = event as PointerEvent;
+      if (!origin) return;
+      // End only on the primary button release. A second button released mid-drag
+      // must not freeze the card. `pointercancel` carries no meaningful `button`
+      // and must always end the drag.
+      if (pe.type === "pointerup" && pe.button !== 0) return;
+
+      const wasDragging = moved;
+      forget();
+      if (!wasDragging) return;
+
+      delete this.element.dataset.dragging;
+      if (header.hasPointerCapture(pe.pointerId)) header.releasePointerCapture(pe.pointerId);
+
+      // Persist the requested point, not the clamped one, so a drop against a narrow
+      // window edge restores where the card was actually put when the window widens.
+      if (this.requested) this.callbacks.onMove(this.requested);
+
+      // A drag does not always produce a click (release outside the card dispatches
+      // none), so `moved` must be reset via setTimeout rather than relying on the click
+      // handler — otherwise the next genuine click on the card is swallowed.
+      window.setTimeout(() => {
+        moved = false;
+      }, 0);
+    };
+
+    this.teardown.push(listen(header, "pointerup", end));
+    this.teardown.push(listen(header, "pointercancel", end));
+
+    // Prevent a drag-end that lands on a button inside the header from also pressing
+    // the button. Capture phase so this runs before the button's own listener.
+    this.teardown.push(
+      listen(
+        header,
+        "click",
+        (event) => {
+          if (!moved) return;
+          moved = false;
+          event.preventDefault();
+          event.stopPropagation();
+        },
+        { capture: true },
+      ),
+    );
+  }
+
+  /** Ask for a viewport position. Stored unclamped; painted clamped. */
+  private moveTo(x: number, y: number): void {
+    this.requested = { x, y };
+    this.paintPosition();
+  }
+
+  /**
+   * Draw the card at the requested position, clamped to keep it on screen.
+   *
+   * `Math.max(EDGE, Math.min(x, limit))` — same ordering as the toolbar: when the
+   * window is narrower than the card the upper bound goes negative, and
+   * `Math.min(≥EDGE, -27)` returns `-27`, pushing the card off-screen. The lower
+   * bound must win.
+   *
+   * Called from `moveTo`, the `ResizeObserver`, and `applyPosition`.
+   * No-op when `requested` is null (card is at its anchor position).
+   */
+  private paintPosition(): void {
+    if (!this.requested) return;
+
+    const box = this.dragSize ?? this.element.getBoundingClientRect();
+    const left = Math.max(
+      EDGE,
+      Math.min(this.requested.x, window.innerWidth - box.width - EDGE),
+    );
+    const top = Math.max(
+      EDGE,
+      Math.min(this.requested.y, window.innerHeight - box.height - EDGE),
+    );
+
+    this.element.dataset.floating = "true";
+    this.element.style.left = `${left}px`;
+    this.element.style.top = `${top}px`;
+  }
+
+  /**
+   * Apply a stored position, or fall back to the anchor-based default.
+   *
+   * Called after construction (with the page's saved position) and on every
+   * viewport resize, so a window narrowed since the card was placed cannot
+   * permanently hide it.
+   *
+   * Passing `null` is a no-op: the card was already positioned by `position()`
+   * in the constructor and there is nothing to override.
+   */
+  applyPosition(position: { x: number; y: number } | null): void {
+    if (!position) return;
+    this.requested = position;
+    this.paintPosition();
   }
 
   private selectKind(kind: AnnotationKind): void {
@@ -327,16 +542,23 @@ export class Composer {
    * the sentence, never the sentence. `ComposerMeta` rather than `ComposerData` is what
    * makes that a type error rather than a promise.
    *
-   * Re-clamped afterwards, against the original anchor. `position` writes a fixed `top`,
-   * and `.card` is `position: fixed` with `overflow: hidden` and no `max-height` — so a
-   * retarget from a bare `<div>` onto a framework component adds Source, Component and
-   * Props rows (~54px) and the card grows downward from a `top` that was clamped when it
-   * was shorter, putting Save, the camera and delete below the viewport. Not repositioning
-   * is about not *following the element*; it was never about refusing to stay on screen.
+   * Re-clamped afterwards against the dragged position (if any) or the original anchor.
+   * `position` writes a fixed `top`, and `.card` is `position: fixed` with `overflow:
+   * hidden` and no `max-height` — so a retarget from a bare `<div>` onto a framework
+   * component adds Source, Component and Props rows (~54px) and the card grows downward
+   * from a `top` that was clamped when it was shorter, putting Save below the viewport.
+   * Not repositioning is about not *following the element*; it was never about refusing
+   * to stay on screen.
    */
   setData(meta: ComposerMeta): void {
     this.renderMeta(meta);
-    this.position(this.anchor);
+    // If the card has been dragged, re-clamp from the dragged position. Otherwise
+    // re-clamp from the original anchor so rows added by a retarget stay on screen.
+    if (this.requested) {
+      this.paintPosition();
+    } else {
+      this.position(this.anchor);
+    }
   }
 
   private metaRow(key: string, value: string, accent = false): HTMLElement {
@@ -370,6 +592,7 @@ export class Composer {
   }
 
   destroy(): void {
+    this.resizeObserver.disconnect();
     for (const off of this.teardown) off();
     this.element.remove();
   }

@@ -9,7 +9,7 @@
 // already agrees on.
 // =============================================================================
 
-import { ANNOTATION_PREFIX, DOCK_PREFIX, NS } from "./protocol";
+import { ANNOTATION_PREFIX, COMPOSER_DOCK_PREFIX, DOCK_PREFIX, NS } from "./protocol";
 import type { Annotation } from "./types";
 
 // Annotations could previously leave only as rendered Markdown on the clipboard —
@@ -34,6 +34,12 @@ export interface ExportFile {
    * mislead a future reader into thinking 1 and 2 need different handling.
    */
   docks?: { page: string; position: { x: number; y: number } }[];
+  /**
+   * Where the composer card was last dragged to, per page.
+   *
+   * Same rationale as `docks`: additive, optional, `version` stays at 1.
+   */
+  composerDocks?: { page: string; position: { x: number; y: number } }[];
 }
 
 /**
@@ -96,12 +102,20 @@ export async function exportAll(): Promise<ExportFile> {
       position: value as { x: number; y: number },
     }));
 
+  const composerDocks = Object.entries(all)
+    .filter(([key, value]) => key.startsWith(COMPOSER_DOCK_PREFIX) && looksLikePosition(value))
+    .map(([key, value]) => ({
+      page: key.slice(COMPOSER_DOCK_PREFIX.length),
+      position: value as { x: number; y: number },
+    }));
+
   return {
     format: EXPORT_FORMAT,
     version: 1,
     exportedAt: new Date().toISOString(),
     pages,
     docks,
+    composerDocks,
   };
 }
 
@@ -123,7 +137,8 @@ export async function clearAllPages(): Promise<number> {
     const all = await chrome.storage.local.get(null);
     const annotated = Object.keys(all).filter((key) => key.startsWith(ANNOTATION_PREFIX));
     const docks = Object.keys(all).filter((key) => key.startsWith(DOCK_PREFIX));
-    const keys = [...annotated, ...docks];
+    const composerDocks = Object.keys(all).filter((key) => key.startsWith(COMPOSER_DOCK_PREFIX));
+    const keys = [...annotated, ...docks, ...composerDocks];
     if (keys.length) await chrome.storage.local.remove(keys);
     return annotated.length;
   } catch {
@@ -230,6 +245,18 @@ export async function importAll(
         continue;
       }
       await chrome.storage.local.set({ [`${DOCK_PREFIX}${entry.page}`]: entry.position });
+    }
+  }
+
+  if (Array.isArray(file.composerDocks)) {
+    for (const entry of file.composerDocks) {
+      if (!entry || typeof entry.page !== "string" || !looksLikePosition(entry.position)) {
+        summary.skipped += 1;
+        continue;
+      }
+      await chrome.storage.local.set({
+        [`${COMPOSER_DOCK_PREFIX}${entry.page}`]: entry.position,
+      });
     }
   }
 
