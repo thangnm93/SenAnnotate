@@ -309,7 +309,8 @@ export function installChildFrame(getSettings: () => Settings): void {
     document,
     "pointermove",
     (event) => {
-      if (!active || mode !== "point") return;
+      // `all` routes hover the same way as `point` — highlight what the pointer is over.
+      if (!active || (mode !== "point" && mode !== "all")) return;
       const target = document.elementFromPoint(event.clientX, event.clientY);
       if (!target || !eligible(target)) {
         clearHover();
@@ -328,13 +329,16 @@ export function installChildFrame(getSettings: () => Settings): void {
     document,
     "click",
     (event) => {
+      // `text` and `all`-with-selection let clicks through for native selection to finish.
       if (!active || mode === "text") return;
+      if (mode === "all" && window.getSelection()?.toString().trim()) return;
       if (isOurUi(event.target as Element)) return;
 
       event.preventDefault();
       event.stopPropagation();
 
-      if (mode !== "point") return;
+      // `all` routes element capture the same way as `point` inside a child frame.
+      if (mode !== "point" && mode !== "all") return;
       const target = document.elementFromPoint(event.clientX, event.clientY);
       if (!target || !eligible(target)) return;
       void capture(target);
@@ -343,12 +347,13 @@ export function installChildFrame(getSettings: () => Settings): void {
   );
 
   // Same reason as the top frame: the page must never see half a click.
+  // `text` and `all` are exempt so the browser can start/settle a text selection.
   for (const type of ["mousedown", "mouseup"] as const) {
     listen(
       document,
       type,
       (event) => {
-        if (!active || mode === "text") return;
+        if (!active || mode === "text" || mode === "all") return;
         if (isOurUi(event.target as Element)) return;
         event.preventDefault();
         event.stopPropagation();
@@ -358,7 +363,8 @@ export function installChildFrame(getSettings: () => Settings): void {
   }
 
   listen(document, "mouseup", () => {
-    if (!active || mode !== "text") return;
+    // Fire in both explicit text mode and all-mode, where text selection is one gesture.
+    if (!active || (mode !== "text" && mode !== "all")) return;
     window.setTimeout(() => {
       const selection = window.getSelection();
       const text = selection?.toString().trim();
@@ -379,7 +385,8 @@ export function installChildFrame(getSettings: () => Settings): void {
   // inspect mode on — in which case `C` arrives here rather than in the top frame.
   listen(document, "keydown", (event) => {
     const keyboard = event as KeyboardEvent;
-    if (!active || mode !== "point") return;
+    // `all` also enables the C / Enter capture shortcuts inside the child frame.
+    if (!active || (mode !== "point" && mode !== "all")) return;
     if (keyboard.metaKey || keyboard.ctrlKey || keyboard.altKey) return;
     if (keyboard.key !== "c" && keyboard.key !== "C" && keyboard.key !== "Enter") return;
 

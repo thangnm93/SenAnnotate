@@ -461,9 +461,9 @@ async function main() {
     const hint = marquee.locator(".toolbar-hint");
     await hint.waitFor({ state: "visible", timeout: 5_000 });
     check(
-      "the hint names the default mode and the keys for the others",
+      "the hint names all three gestures in the default all-mode",
       ((await hint.textContent())?.trim() ?? "") ===
-        "Click an element · ⌘/Ctrl+drag across several · C captures hover · 2 text · 3 area",
+        "Click element · drag area · select text · C hover",
       `hint read "${(await hint.textContent())?.trim() ?? ""}"`,
     );
 
@@ -596,6 +596,57 @@ async function main() {
     );
 
     // -------------------------------------------------------------------------
+    // All mode — mega inspect: click, drag, and text selection in one mode
+    // -------------------------------------------------------------------------
+    //
+    // Own fixture: annotations accumulate in storage keyed by origin + pathname, so a
+    // page other blocks have been through opens with their leftovers. Count assertions
+    // on a fresh page only.
+    const inspectAll = await context.newPage();
+    await inspectAll.goto(`${base}/inspect-all.html`);
+    await inspectAll.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
+    await inspectAll.locator(".tool--brand").click();
+    await inspectAll.locator(".toolbar-hint").waitFor({ state: "visible", timeout: 5_000 });
+
+    check(
+      "all-mode hint shows when inspect turns on",
+      ((await inspectAll.locator(".toolbar-hint").textContent()) ?? "").trim() ===
+        "Click element · drag area · select text · C hover",
+    );
+    check(
+      "the all-mode button is marked pressed",
+      (await inspectAll.locator('.tool[aria-label^="All modes"]').getAttribute("aria-pressed")) === "true",
+    );
+
+    // Click → element annotation
+    await inspectAll.locator("#box").click();
+    const allComposer = inspectAll.locator(".composer");
+    await allComposer.waitFor({ state: "visible", timeout: 5_000 });
+    check("a plain click in all-mode opens a composer", await allComposer.isVisible());
+    await inspectAll.keyboard.press("Escape");
+
+    // Drag → marquee area annotation
+    const allBoxA = await inspectAll.locator("#box").boundingBox();
+    const allBoxB = await inspectAll.locator("#box-b").boundingBox();
+    const allDragFrom = { x: allBoxA.x - 10, y: allBoxA.y - 10 };
+    const allDragTo = { x: allBoxB.x + allBoxB.width + 10, y: allBoxB.y + allBoxB.height + 10 };
+
+    await inspectAll.mouse.move(allDragFrom.x, allDragFrom.y);
+    await inspectAll.mouse.down();
+    await inspectAll.mouse.move(allDragTo.x, allDragTo.y, { steps: 10 });
+    await inspectAll.mouse.up();
+    const allAreaComposer = inspectAll.locator(".composer");
+    await allAreaComposer.waitFor({ state: "visible", timeout: 5_000 });
+    check(
+      "a drag in all-mode selects an area and opens a composer",
+      ((await allAreaComposer.textContent()) ?? "").includes("elements") ||
+        (await allAreaComposer.isVisible()),
+    );
+    await inspectAll.keyboard.press("Escape");
+
+    await inspectAll.close();
+
+    // -------------------------------------------------------------------------
     // Measure — box model, and the gap between two elements
     // -------------------------------------------------------------------------
     //
@@ -617,7 +668,7 @@ async function main() {
     await measure.keyboard.press("4");
     check(
       "the 4 key does nothing while the setting is off",
-      ((await measure.locator(".toolbar-hint").textContent()) ?? "").includes("Click an element"),
+      ((await measure.locator(".toolbar-hint").textContent()) ?? "").includes("Click element"),
       `hint read "${(await measure.locator(".toolbar-hint").textContent())?.trim() ?? ""}"`,
     );
 
@@ -646,7 +697,7 @@ async function main() {
     check(
       "the hint advertises mode 4 once it exists",
       ((await measure.locator(".toolbar-hint").textContent()) ?? "").trim() ===
-        "Click an element · ⌘/Ctrl+drag across several · C captures hover · 2 text · 3 area · 4 measure",
+        "Click element · drag area · select text · C hover · 4 measure",
       `hint read "${(await measure.locator(".toolbar-hint").textContent())?.trim() ?? ""}"`,
     );
 
@@ -1091,9 +1142,9 @@ async function main() {
     await measure.waitForTimeout(200);
 
     check(
-      "switching the master off drops you back to point mode",
+      "switching the master off drops you back to all mode",
       ((await measure.locator(".toolbar-hint").textContent()) ?? "").trim() ===
-        "Click an element · ⌘/Ctrl+drag across several · C captures hover · 2 text · 3 area",
+        "Click element · drag area · select text · C hover",
       `hint read "${(await measure.locator(".toolbar-hint").textContent())?.trim() ?? ""}"`,
     );
     await measure.mouse.move(save.x + 8, save.y + 8);
@@ -1566,6 +1617,10 @@ async function main() {
         "true",
     );
     await marquee.keyboard.press("Escape");
+    // Let the composer's 400ms exit animation finish before the next click.
+    // Without this wait the fading card can cover #card-c and Playwright's
+    // actionability check keeps retrying until its own 5000ms timeout expires.
+    await marquee.waitForTimeout(450);
 
     // Anything already collected joins the box rather than being dropped — the same
     // rule a plain click follows, so the modifier keeps one meaning throughout.
@@ -1694,7 +1749,7 @@ async function main() {
     check(
       "Escape drops the set and stays in inspect mode",
       (await pickHint()) ===
-        "Click an element · ⌘/Ctrl+drag across several · C captures hover · 2 text · 3 area" &&
+        "Click element · drag area · select text · C hover" &&
         (await pick.locator(".highlight--preview").count()) === 0 &&
         (await pick.locator(".tool--brand").getAttribute("aria-pressed")) === "true",
       `hint read "${await pickHint()}", ${await pick.locator(".highlight--preview").count()} boxes`,

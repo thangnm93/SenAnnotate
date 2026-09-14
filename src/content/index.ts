@@ -126,7 +126,9 @@ let diagnosticsCache: Diagnostics | null = null;
  */
 let hidden = false;
 let active = false;
-let mode: InspectMode = "point";
+// "all" is the mega-mode default: a short click → element, a drag → area, a text
+// selection → text. The user never has to choose before they start annotating.
+let mode: InspectMode = "all";
 let frozen = false;
 let panelOpen = false;
 
@@ -391,7 +393,9 @@ function enforceCssSetting(): void {
 
 function enforceMeasureSetting(): void {
   if (measureModeAvailable() || mode !== "measure") return;
-  mode = "point";
+  // Return to all-mode rather than point: "all" is the entry point, so disabling
+  // measurement tools lands back at the same default the user sees on first activation.
+  mode = "all";
   measureOverlay.hideAll();
   broadcastFrameState(active, mode);
 }
@@ -921,7 +925,8 @@ function currentMeasurements(target: Element): Measurements {
  * conclusion `docs/modal-focus-leak/` reached for dialogs.
  */
 function captureHovered(): void {
-  if (mode !== "point" && mode !== "measure") return;
+  // Allow in point, measure, and the mega all-mode — all three route C the same way.
+  if (mode !== "point" && mode !== "measure" && mode !== "all") return;
 
   if (hoveredElement && !hoveredElement.isConnected) hoveredElement = null;
 
@@ -1795,7 +1800,8 @@ function queueSync(): void {
       if (hoveredElement?.isConnected) drawHover(hoveredElement);
       return;
     }
-    if (mode !== "point") return;
+    // Hover redraw applies in point and all modes; text and area have no hover path.
+    if (mode !== "point" && mode !== "all") return;
     if (picked.length) drawPicked();
     else if (hoveredElement) {
       overlay.showHighlights([hoveredElement.getBoundingClientRect()], hoverLabel ?? undefined);
@@ -1994,9 +2000,10 @@ function installTopFrame(): void {
     "pointermove",
     (event) => {
       if (!active || composer || marqueeStart) return;
-      // `measure` shares the whole hover path with `point` — it is the same "what is the
-      // pointer over" question, answered with two more things drawn on top.
-      if (mode !== "point" && mode !== "measure") return;
+      // `measure` and `all` share the whole hover path with `point` — it is the same
+      // "what is the pointer over" question. `all` needs it for element highlighting
+      // before the user commits their gesture (click vs drag vs text).
+      if (mode !== "point" && mode !== "measure" && mode !== "all") return;
       // Pointer capture retargets the toolbar drag's moves; it does not stop them
       // propagating, and `root.ts` deliberately lets `pointermove` through the host. So
       // during a fast drag the cursor outruns the pill, lands on page content, and this
@@ -2043,6 +2050,11 @@ function installTopFrame(): void {
       // In text mode a click is how you finish a selection, so let it through.
       if (mode === "text") return;
 
+      // In all mode, skip element-pick when the user just finished a text selection —
+      // the mouseup handler already called beginAnnotation with the text, so doing
+      // element-pick here would open a second composer for the same gesture.
+      if (mode === "all" && window.getSelection()?.toString().trim()) return;
+
       event.preventDefault();
       event.stopPropagation();
 
@@ -2081,7 +2093,8 @@ function installTopFrame(): void {
         return;
       }
 
-      if (mode !== "point") return;
+      // `all` mode shares element-pick/collect logic with `point` mode.
+      if (mode !== "point" && mode !== "all") return;
       const target = document.elementFromPoint(event.clientX, event.clientY);
       if (!target || !eligible(target)) return;
 
@@ -2102,12 +2115,15 @@ function installTopFrame(): void {
   );
 
   // Swallow the mousedown/mouseup pair too, so the page never sees a half-click.
+  // `text` mode is already exempt — the browser must see mousedown to start a selection.
+  // `all` mode gets the same exemption: text selection needs native mousedown/mouseup, and
+  // the click handler already swallows element-picks so pages never see a half-click there.
   for (const type of ["mousedown", "mouseup"] as const) {
     listen(
       document,
       type,
       (event) => {
-        if (!active || composer || mode === "text") return;
+        if (!active || composer || mode === "text" || mode === "all") return;
         if (isOurUi(event.target as Element)) return;
         event.preventDefault();
         event.stopPropagation();
@@ -2119,7 +2135,10 @@ function installTopFrame(): void {
   // --- text selection ----------------------------------------------------------
 
   listen(document, "mouseup", () => {
-    if (!active || composer || mode !== "text") return;
+    // Fire in both explicit text mode and the all mega-mode where text selection is one
+    // of the three recognised gestures. The click handler checks getSelection() to avoid
+    // double-annotating when mode === "all".
+    if (!active || composer || (mode !== "text" && mode !== "all")) return;
 
     // Let the browser settle the selection before reading it.
     window.setTimeout(() => {
@@ -2153,8 +2172,14 @@ function installTopFrame(): void {
 
       // `area` is a drag from the first pixel — the mode says so. In `point` the drag
       // has to earn it, because the same press with the same modifier is also a pick.
+      // In `all` mode any drag becomes a marquee (no modifier required), so set the
+      // pending anchor unconditionally and let `promoteMarquee` decide when it commits.
       if (mode === "area") {
         beginMarquee(anchor);
+        return;
+      }
+      if (mode === "all") {
+        marqueePending = anchor;
         return;
       }
       if (mode === "point" && (event.metaKey || event.ctrlKey)) marqueePending = anchor;
@@ -2302,6 +2327,15 @@ function installTopFrame(): void {
     if (!active) return;
 
     switch (keyboard.key) {
+      case "0":
+        // Return to the mega all-mode from any explicit mode.
+        mode = "all";
+        resetMarquee();
+        clearPicked();
+        overlay.hideAll();
+        measureOverlay.hideAll();
+        render();
+        break;
       case "1":
         mode = "point";
         resetMarquee();
