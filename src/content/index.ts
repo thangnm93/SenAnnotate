@@ -40,6 +40,14 @@ import {
   setFrozen,
 } from "./bridge";
 import { captureDraft, resolveElement, viewportBoxes, type Draft } from "./capture";
+import {
+  diffDesign,
+  previewDesign,
+  previewText,
+  readDesign,
+  revertDesign,
+  type DesignSnapshot,
+} from "./design";
 import { copyText } from "./clipboard";
 import { pickColour } from "./eyedropper";
 import {
@@ -224,22 +232,43 @@ let retargetToken = 0;
 let screenshotPending = false;
 
 /**
+ * The element's styling as the composer found it, so the preview can be undone.
+ *
+ * Held here rather than in the composer because it belongs to the *page*: whatever
+ * closes the composer — save, cancel, Escape, the panel opening another note — has to
+ * put the element back, and only this module sees all of those.
+ */
+let designSnapshot: DesignSnapshot | null = null;
+
+/**
+ * The element that snapshot came off, paired with it rather than read back out of
+ * `composerTargets`.
+ *
+ * Every path that opens a composer while one is already up — a marker click, a panel row,
+ * a draft arriving from a child frame — reassigns `composerTargets` before it gets there,
+ * so by revert time the list no longer names the element wearing the preview. Holding it
+ * here is what makes "the panel opening another note" a real revert path rather than a
+ * claim, and it means the revert no longer has to re-derive whether there was one target.
+ */
+let designTarget: Element | null = null;
+
+/**
  * What the last right-click was over: the element under the pointer, and the element the
  * selection was about if there was one.
  *
- * `chrome.contextMenus` tells an extension the frame, the page URL and the selected text,
- * and nothing whatsoever about the element under the pointer. `contextmenu` fires before
- * the menu opens, so recording it there is the only way the menu item can act on the thing
- * the user right-clicked — which is the entire gesture.
+ * `chrome.contextMenus` tells an extension the page URL and the selected text, and
+ * nothing whatsoever about the element under the pointer. `contextmenu` fires before
+ * the menu opens, so recording it there is the only way the menu item can act on the
+ * thing the user right-clicked — which is the entire gesture.
  *
- * Not cleared after use: reopening the menu on the same element and picking the item twice
- * should work, and the liveness check at use time is what catches a stale record.
+ * Not cleared after use: reopening the menu on the same element and picking the item
+ * twice should work, and the liveness check at use time is what catches a stale record.
  *
  * `WeakRef` rather than the node, because "not cleared after use" would otherwise mean
- * right-clicking a large container the app then removes retains the whole detached subtree
- * for the life of the page. `setActive(false)` clears both alongside `hoveredElement`, so
- * leaving inspect mode drops them too. Only the *element* is kept; the selected text comes
- * from Chrome with the menu click and is never held here.
+ * right-clicking a large container the app then removes retains the whole detached
+ * subtree for the life of the page. `setActive(false)` clears both alongside
+ * `hoveredElement`, so leaving inspect mode drops them too. Only the *element* is kept;
+ * the selected text comes from Chrome with the menu click and is never held here.
  */
 let rightClicked: WeakRef<Element> | null = null;
 let rightClickedSelection: WeakRef<Element> | null = null;
@@ -249,6 +278,7 @@ function liveTarget(ref: WeakRef<Element> | null): Element | null {
   const element = ref?.deref();
   return element?.isConnected ? element : null;
 }
+
 
 // -----------------------------------------------------------------------------
 // UI
@@ -1093,7 +1123,21 @@ function composerMeta(draft: Draft): ComposerMeta {
   };
 }
 
+/**
+ * Hand the page back whatever the open composer borrowed. Idempotent, and safe to call
+ * when nothing was ever previewed.
+ */
+function revertPreview(): void {
+  if (designTarget && designSnapshot) revertDesign(designTarget, designSnapshot);
+  designTarget = null;
+  designSnapshot = null;
+}
+
 function openComposer(draft: Draft, anchor: DOMRect, existing: Annotation | null): void {
+  // Before anything else: replacing an open composer is a close, and the element the old
+  // one was previewing on has to be put back while we still know which one it was.
+  revertPreview();
+
   composer?.destroy();
   composerEditing = existing;
   overlay.showHighlights(
@@ -1101,21 +1145,54 @@ function openComposer(draft: Draft, anchor: DOMRect, existing: Annotation | null
     { primary: draft.element, secondary: formatSource(draft.source) },
   );
 
+  // One element, no text selection: anything else has no single thing to preview on.
+  const target = composerTargets.length === 1 && !draft.selectedText ? composerTargets[0] : null;
+  designTarget = target;
+  designSnapshot = target ? readDesign(target) : null;
+
   // The draft is replaced wholesale by a retarget, and `onSubmit` has to store the one on
   // screen rather than the one the composer opened with. Module state, not a closure: see
   // the declaration.
   composerDraft = draft;
   retargetFrom = composerTargets[0] ?? null;
 
+  /**
+   * The highlight is drawn from a measurement taken before the preview; a box that no
+   * longer fits the element is worse than no box. Both previews move it, so both call this.
+   */
+  const redrawHighlight = (): void => {
+    overlay.showHighlights(composerTargets.map((el) => el.getBoundingClientRect()), {
+      primary: draft.element,
+      secondary: formatSource(draft.source),
+    });
+  };
+
   const callbacks: ComposerCallbacks = {
-    onSubmit: (comment, kind: AnnotationKind, referenceImages: string[]) => {
-      // Undefined rather than an empty array: it keeps the stored shape identical to
-      // what every annotation written before this feature looks like.
+    onSubmit: (comment, kind: AnnotationKind, design, referenceImages) => {
+      const changes = designSnapshot ? diffDesign(designSnapshot, design.values) : [];
+      // Undefined rather than an empty array or a null: an annotation with no design
+      // edits keeps exactly the stored shape it had before this feature existed.
+      const designChanges = changes.length ? changes : undefined;
+      const textChange =
+        design.text !== null && designSnapshot?.text != null
+          ? { from: designSnapshot.text, to: design.text }
+          : undefined;
+      // Same empty-as-absent rule for reference images.
       const images = referenceImages.length ? referenceImages : undefined;
+
       if (existing) {
         existing.comment = comment;
         existing.kind = kind;
         existing.referenceImages = images;
+        // Only when there was an element to diff against. Re-editing a note whose element
+        // the page has since rebuilt gives no snapshot, so both of these are `undefined`
+        // — and writing them through would delete the deltas the reviewer recorded
+        // earlier, in exchange for fixing a typo in the comment. The Design section is
+        // not even drawn in that state, so nothing would have warned them.
+        if (designSnapshot) {
+          existing.designChanges = designChanges;
+          existing.textChange = textChange;
+        }
       } else {
         annotations = [
           ...annotations,
@@ -1124,6 +1201,8 @@ function openComposer(draft: Draft, anchor: DOMRect, existing: Annotation | null
             id: newId(),
             comment,
             kind,
+            designChanges,
+            textChange,
             referenceImages: images,
             timestamp: Date.now(),
           } as Annotation,
@@ -1136,6 +1215,15 @@ function openComposer(draft: Draft, anchor: DOMRect, existing: Annotation | null
     },
     onCancel: () => closeComposer(),
     onScreenshot: () => void captureScreenshot(existing ?? composerDraft ?? draft),
+    onDesignPreview: (property, value) => {
+      if (designTarget) previewDesign(designTarget, property, value);
+      redrawHighlight();
+    },
+    onTextPreview: (text) => {
+      if (designTarget) previewText(designTarget, text);
+      // Rewriting a label resizes the element as surely as changing its padding does.
+      redrawHighlight();
+    },
     onAttach: (files) => void attachReferenceImages(files),
     onDelete: existing
       ? () => {
@@ -1158,6 +1246,13 @@ function openComposer(draft: Draft, anchor: DOMRect, existing: Annotation | null
       ...composerMeta(draft),
       initialComment: existing?.comment,
       initialKind: existing?.kind,
+      design: designSnapshot
+        ? {
+            snapshot: designSnapshot,
+            changes: existing?.designChanges,
+            text: existing?.textChange?.to,
+          }
+        : undefined,
       // Only an existing note has any. A fresh `Draft` carries the field structurally —
       // `Omit<Annotation, …>` keeps it — but `captureDraft` never writes it, and
       // `openEditor` passes the same object as both `draft` and `existing`, so a
@@ -1401,6 +1496,12 @@ function closeComposer(): void {
   // is decorating lives in that composer's closure. Leaving it up would strand a card
   // with nowhere to put its result.
   closeShotEditor();
+
+  // Unconditionally — saving does not keep the preview either. The report describes a
+  // change to make in the codebase; leaving the page wearing it would have the reviewer
+  // testing against a mirage, and the next reload would silently take it away again.
+  revertPreview();
+
   composer?.destroy();
   composer = null;
   composerEditing = null;

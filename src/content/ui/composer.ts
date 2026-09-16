@@ -2,7 +2,9 @@
 // Composer — the popup you type the annotation into
 // =============================================================================
 
-import { ANNOTATION_KINDS, type AnnotationKind } from "../../shared/types";
+import { ANNOTATION_KINDS, type AnnotationKind, type DesignChange } from "../../shared/types";
+import type { DesignSnapshot } from "../design";
+import { DesignPanel } from "./design-panel";
 import { h, icon, listen, takeFocus } from "./dom";
 
 /**
@@ -28,6 +30,16 @@ export interface ComposerMeta {
 export interface ComposerData extends ComposerMeta {
   initialComment?: string;
   initialKind?: AnnotationKind;
+  /**
+   * Present only when the annotation is about one element that can carry a preview —
+   * absent for a text selection or a multi-element note, where "the element" the
+   * controls would edit is not a single thing.
+   */
+  design?: {
+    snapshot: DesignSnapshot;
+    changes?: DesignChange[];
+    text?: string;
+  };
   initialImages?: string[];
 }
 
@@ -35,9 +47,12 @@ export interface ComposerData extends ComposerMeta {
 export type RetargetDirection = "parent" | "child" | "previous" | "next";
 
 export interface ComposerCallbacks {
-  onSubmit(comment: string, kind: AnnotationKind, referenceImages: string[]): void;
+  onSubmit(comment: string, kind: AnnotationKind, design: ComposerDesign, referenceImages: string[]): void;
   onCancel(): void;
   onScreenshot(): void;
+  /** Show one property on the page while it is being chosen. */
+  onDesignPreview?(property: string, value: string): void;
+  onTextPreview?(text: string): void;
   /**
    * Files the user pasted or picked. Encoding them is the orchestrator's job — this
    * layer draws, and does not know what a canvas is for.
@@ -46,6 +61,13 @@ export interface ComposerCallbacks {
   onDelete?(): void;
   /** Absent when retargeting does not apply — a saved note, text, or a multi-select. */
   onRetarget?(direction: RetargetDirection): void;
+}
+
+export interface ComposerDesign {
+  /** Property → requested value, for `diffDesign`. Empty when nothing was touched. */
+  values: Record<string, string>;
+  /** The rewritten text, or null when it was left alone. */
+  text: string | null;
 }
 
 const WIDTH = 380;
@@ -83,14 +105,16 @@ export class Composer {
   private readonly textarea: HTMLTextAreaElement;
   private readonly teardown: Array<() => void> = [];
   private readonly kindButtons = new Map<AnnotationKind, HTMLButtonElement>();
+  private readonly design: DesignPanel | null;
   private readonly strip: HTMLElement;
   private readonly fileInput: HTMLInputElement;
   /**
    * Where the card was first placed, kept rather than used once. `position()` decides
    * between below the element and flipped above it by measuring the card, and the card
-   * changes height after that decision was taken — attaching an image grows it, and a
-   * retarget rebuilds a taller meta block. Both have to re-clamp against the anchor the
-   * first decision was made against, not against a `top` frozen when the card was shorter.
+   * changes height after that decision was taken — attaching an image grows it, opening
+   * the Design section grows it, and a retarget rebuilds a taller meta block. All three
+   * have to re-clamp against the anchor the first decision was made against, not against
+   * a `top` frozen when the card was shorter.
    */
   private readonly anchor: { left: number; top: number; right: number; bottom: number };
   private images: string[];
@@ -108,6 +132,21 @@ export class Composer {
     this.callbacks = callbacks;
     this.anchor = anchor;
     this.kind = data.initialKind ?? "ui";
+    this.design = data.design
+      ? new DesignPanel(
+          data.design.snapshot,
+          {
+            onChange: (property, value) => callbacks.onDesignPreview?.(property, value),
+            onTextChange: (text) => callbacks.onTextPreview?.(text),
+            // The section is ~216px of rows that appear after the card was placed, and
+            // `max-height` caps how much it grows rather than stopping it: a composer
+            // anchored low on a short viewport would put its own footer — Save included —
+            // below the fold, inside a `pointer-events: none` layer with nothing to scroll.
+            onToggle: () => this.position(this.anchor),
+          },
+          { changes: data.design.changes, text: data.design.text },
+        )
+      : null;
     this.images = [...(data.initialImages ?? [])];
 
     this.strip = h("div", { class: "composer__images" });
@@ -213,7 +252,7 @@ export class Composer {
           icon("close", 14),
         ),
       ),
-      h("div", { class: "card__body" }, this.meta, kinds, this.textarea, this.strip, this.fileInput),
+      h("div", { class: "card__body" }, this.meta, kinds, this.textarea, this.design?.element ?? null, this.strip, this.fileInput),
       footer,
     );
 
@@ -235,6 +274,16 @@ export class Composer {
         if (keyboard.isComposing) return;
 
         if (keyboard.key === "Escape") {
+          // A native `<select>` and the colour picker both dismiss their own popup with
+          // Escape, and that keydown bubbles to here. Treating it as "cancel the note"
+          // would throw away the typed comment and revert every preview because someone
+          // shut a dropdown, so the control that owns the key keeps it.
+          const origin = event.composedPath()[0];
+          const ownsEscape =
+            origin instanceof HTMLSelectElement ||
+            (origin instanceof HTMLInputElement && origin.type === "color");
+          if (ownsEscape) return;
+
           keyboard.preventDefault();
           keyboard.stopPropagation();
           this.callbacks.onCancel();
@@ -325,6 +374,11 @@ export class Composer {
     }
 
     takeFocus(this.textarea);
+
+    // After `position`, so the card is placed before the element starts changing size
+    // underneath it. No-op on a fresh note; on a reopened one it re-applies the edits the
+    // controls were just seeded with.
+    this.design?.replay();
   }
 
   /** Put the caret back after something else — the markup editor — borrowed focus. */
@@ -405,7 +459,10 @@ export class Composer {
       takeFocus(this.textarea);
       return;
     }
-    this.callbacks.onSubmit(comment, this.kind, this.images);
+    this.callbacks.onSubmit(comment, this.kind, {
+      values: this.design?.currentValues() ?? {},
+      text: this.design?.currentText() ?? null,
+    }, this.images);
   }
 
   /**

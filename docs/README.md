@@ -222,6 +222,21 @@ button that also cleared was designed and then cut, and the argument is recorded
 rather than lost. Its `changelog.md` records the copy shortcut this feature originally
 carried, and the 0.6.0 binding it collided with.
 
+## [`design-edits/`](./design-edits/) — unreleased
+
+"Tighten this and make it feel less heavy" makes the agent invent the numbers, and the
+reviewer never found out whether their own idea was right. Thirteen properties can now be
+tried on the real element from inside the composer, and what they settled on reaches the
+report as a `from → to` table. Its `context.md` states the rule the whole feature is built
+around and the one place it diverges from the tool it was modelled on: **the preview is a
+loan**. It is undone whenever the composer closes, saving included, by restoring the
+`style` attribute verbatim — or removing it, when the element never had one — because a
+reviewer testing against a change that exists in no codebase is worse served than one who
+saw it for a minute. Its `changelog.md` ends with the PR review follow-ups, and they are
+worth reading as one lesson: three separate bugs were the same mistake, a snapshot that
+could not describe what it found.
+
+
 ## [`share-export/`](./share-export/) — unreleased
 
 A review two people could not previously receive: someone without the extension, and
