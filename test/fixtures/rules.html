@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Domain rules fixture</title>
+    <style>
+      body { margin: 0; font: 14px/1.4 system-ui, sans-serif; padding: 24px; }
+    </style>
+  </head>
+  <body>
+    <!--
+      A fixture of its own, and the block that drives it runs LAST in the suite. The rules
+      live in chrome.storage.sync, which every page in this profile shares — a rule left
+      behind does not merely disturb the next block, it switches the extension off for the
+      rest of the run, and every `.toolbar` locator after it times out for a reason that
+      looks nothing like the cause.
+    -->
+    <h1>Domain rules fixture</h1>
+    <p id="intro">Whether the toolbar appears here at all is the assertion.</p>
+  </body>
+</html>

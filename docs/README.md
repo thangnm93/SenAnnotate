@@ -292,6 +292,15 @@ things: why a card this tall cannot use the composer's "prefer, flip, clamp" pla
 why the default corner is left entirely to CSS. The `changelog.md` records the e2e trap —
 a vertical drag gesture whose first step leaves the pill never starts one.
 
+## [`domain-rules/`](./domain-rules/) — unreleased
+
+An allowlist or blocklist of host patterns, so the extension can be kept off a customer's
+production site entirely. Its `context.md` is the one to read before adding any other
+setting that can switch the UI off: it argues why this one is edited in the **popup** rather
+than the toolbar's settings card (the card lives inside the overlay a blocked site does not
+get), why the check happens *before* anything is built rather than hiding the host the way
+`hide-until-restart/` does, and why `*` deliberately matches only one label.
+
 ## [`context-menu/`](./context-menu/) — unreleased
 
 Right-click an element and annotate it, with no mode to arm first — the gesture DevTools'
@@ -300,6 +309,7 @@ extension **no element and no coordinates**, so the whole design is a capture-ph
 in the page plus a menu click that only says "use it". It also records why a right-click
 inside an iframe is *reported* rather than handled, and the security-relevant change to the
 frame boundary that fixing it would need.
+
 ## [`freeze-frame-scope/`](./freeze-frame-scope/) — issue #24
 
 `freeze.ts` was monkey-patching five native timer functions in every iframe at
