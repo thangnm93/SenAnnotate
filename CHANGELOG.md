@@ -10,7 +10,28 @@ matching the tag being released and refuses to publish without one.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.6] — unreleased
+## [0.8.7] — unreleased
+
+[Compare with v0.8.6](https://github.com/thangnm93/SenAnnotate/compare/v0.8.6...v0.8.7)
+
+### Added
+
+- hide the whole overlay with a close button; icon click restores (4a1b0ee)
+- put reference images in the shared HTML review (9e5d1ab)
+- annotate an element straight from the right-click menu (b6c42f9)
+- paste a reference image showing what it should look like instead (e42740c)
+- a self-contained .html review, and import onto this site (107e73a)
+
+### Fixed
+
+- isolate annotations per page on SPA navigation (3f6d877)
+- keep the reference-images storage justification under 1,000 characters (f74c88b)
+- keep the context-menu host-permission text under 1,000 characters (a5a228b)
+- annotate the element the right-click was on, and offer the menu only where it works (f3683c8)
+- keep a pasted image inside the overlay, and size it before it reaches the canvas (15f43ae)
+- escape every interpolation in the shared review, and cap it with a CSP (f9ce29e)
+
+## [0.8.6] — 2026-08-21
 
 [Compare with v0.8.5](https://github.com/thangnm93/SenAnnotate/compare/v0.8.5...v0.8.6)
 
