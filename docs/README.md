@@ -260,6 +260,13 @@ touching pointer handling again: it sets out why adding a drag did **not** reope
 `modal-click-leak/` or `modal-focus-leak/`, and which of those guarantees hold by
 design and which hold by accident.
 
+## [`composer-drag/`](./composer-drag/) — unreleased
+
+The annotation card always opened anchored to the clicked element, which on a crowded
+page is often unreadable. It can now be dragged by its header, and the dropped position
+is remembered per page. Its `context.md` is the companion to `draggable-toolbar/`: same
+pointer-capture rules, a separate storage prefix, and why the textarea is not the handle.
+
 ## [`modal-trap-refocus/`](./modal-trap-refocus/) — unreleased
 
 The third act of the modal-focus story, and the one that contradicts the second: inside a
