@@ -29,8 +29,17 @@ export type ThemePreference = "auto" | "light" | "dark";
  */
 export type ScreenshotDelivery = "path" | "embed";
 
-/** What a click means while inspect mode is on. */
-export type InspectMode = "point" | "text" | "area" | "measure" | "edit";
+/**
+ * What input gesture inspect mode is currently routing.
+ *
+ * `"all"` is the mega-mode and the default: a short click captures the element, a drag
+ * captures the elements inside the drawn box, and a text selection captures the
+ * highlighted text. The three explicit values lock into one gesture type and exist as
+ * secondary controls for power users who prefer a single interaction surface. `"measure"`
+ * activates the two-click distance/box-model tool (only reachable when `measureTools` is
+ * enabled in settings). `"edit"` opens the live CSS editor on the hovered element.
+ */
+export type InspectMode = "all" | "point" | "text" | "area" | "measure" | "edit";
 
 // -----------------------------------------------------------------------------
 // Triage
