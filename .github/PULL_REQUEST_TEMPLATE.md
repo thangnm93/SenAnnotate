@@ -69,9 +69,9 @@
 ### If you added an e2e block
 
 - [ ] It uses **its own fixture** if it asserts on a count. `chrome.storage.local` is
-      shared across the suite's single browser context and annotations are keyed on
-      `origin + pathname`, so a shared fixture opens with whatever an earlier block left
-      on it
+      shared across the suite's single browser context and the notes list is per origin,
+      so a shared fixture opens with whatever an earlier block left on it (`at("x.html")`
+      in `e2e.mjs` gives each fixture file an origin of its own)
 - [ ] It does not call a permission-gated API from the extension popup — the grant covers
       the fixture origin, not `chrome-extension://`, and the suite **hangs** rather than
       failing

@@ -159,7 +159,7 @@ hover label appears instantly while the component chain arrives a round trip lat
 
 | | |
 |---|---|
-| Annotations | `chrome.storage.local`, keyed on `origin + pathname` |
+| Annotations | `chrome.storage.local`, one key per `origin + pathname`; a page loads every key of its origin as one list |
 | Settings | `chrome.storage.sync` |
 
 Both key names live in `shared/protocol.ts`, because the popup needs the same strings.

@@ -39,8 +39,8 @@ component chain and the owner's props — you supply the sentence and the type.
 
 ![The composer, showing element, source, component chain, props and the type chips](images/composer.jpg)
 
-**3. Collect as many as you need.** They persist per page, survive a reload, and come
-back when you return to the same screen.
+**3. Collect as many as you need.** They persist per site, survive a reload, and
+follow you from page to page.
 
 ![The annotations panel with the All/Open/Done filter and captured diagnostics](images/panel-triage.png)
 

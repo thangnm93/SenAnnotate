@@ -111,8 +111,8 @@ whose own polling has stopped, which is occasionally confusing.
 
 ### Clear after copying
 
-Off by default. When on, the page's notes are emptied **once a copy has actually reached
-the clipboard** — not merely once you asked for one — so the next round starts clean.
+Off by default. When on, the site's notes — every page's — are emptied **once a copy has
+actually reached the clipboard** — not merely once you asked for one — so the next round starts clean.
 
 It drops the action trail and the diagnostics with them, exactly as *Clear all* does. The
 distinction matters: a failed clipboard write does not lose your review.

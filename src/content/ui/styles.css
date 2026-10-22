@@ -1590,6 +1590,20 @@ kbd {
   text-overflow: ellipsis;
 }
 
+.panel__page {
+  margin: 8px 0 2px;
+  color: var(--sa-fg-muted);
+  font-family: var(--sa-mono);
+  font-size: 10.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.panel__page[data-here="false"] ~ .entry {
+  opacity: 0.7;
+}
+
 .entry__source {
   margin-top: 1px;
   color: var(--sa-accent-strong);

@@ -73,6 +73,23 @@ function startServer() {
 }
 
 /**
+ * A note an older build stored under a *different* path of the same origin. Notes used to
+ * live in one slot per page and never travel; the list is per origin now, so this one has
+ * to surface on `/upgrade.html` without anything having migrated it.
+ */
+const LEGACY_OTHER_PAGE_NOTE = {
+  id: "legacy-other-page",
+  comment: "Stored on another page by an older version.",
+  timestamp: 1_700_000_100_000,
+  element: 'link "Pricing"',
+  elementPath: "body > a",
+  selector: "body > a.pricing",
+  x: 20,
+  y: 60,
+  isFixed: false,
+};
+
+/**
  * The stored note from before the fields 0.3.0 and later added — no `kind`, no `status`,
  * no screenshot, no frame. Written straight into storage from an extension page, which is
  * the only context that can, and the reason the upgrade check is worth having at all: the
@@ -168,6 +185,10 @@ async function main() {
         },
         [`${base}/upgrade.html`, LEGACY_NOTE],
       );
+      await popup.evaluate(
+        async ([key, note]) => chrome.storage.local.set({ [key]: [note] }),
+        [`senannotate:page:${base}/pricing`, LEGACY_OTHER_PAGE_NOTE],
+      );
 
       // Through the real controls, so what is asserted after the upgrade is what a user
       // set rather than a value written past the UI. Those controls are in the toolbar's
@@ -228,11 +249,19 @@ async function main() {
       await page.locator('.tool[aria-label^="Annotations"]').click();
       await page.locator(".panel").waitFor({ state: "visible", timeout: 10_000 });
 
+      // Two notes belong to this page and one to /pricing; the list now holds all three,
+      // and only this page's two are pinned.
       const entries = await page.locator(".entry").count();
       check(
         "notes taken on the old version are still on the page",
-        entries === 2,
-        `${entries} entries after the upgrade, expected 2`,
+        entries === 3,
+        `${entries} entries after the upgrade, expected 3`,
+      );
+      const pins = await page.locator(".marker").count();
+      check("only this page's old notes are pinned", pins === 2, `${pins} pins, expected 2`);
+      check(
+        "a note an older build stored for another page joins the list under its path",
+        (await page.locator('.panel__page[data-here="false"]').textContent())?.trim() === "/pricing",
       );
 
       await page.locator(".panel .button--primary").click();
@@ -251,7 +280,12 @@ async function main() {
       // The count badge is fed from the same storage the panel reads, so a mismatch here
       // would mean the notes came back but the toolbar disagrees about them.
       const badge = await page.locator(".count").textContent();
-      check("the toolbar count agrees after the upgrade", badge === "2", `badge read "${badge}"`);
+      check(
+        "the other page's old note is in the report, under its page",
+        /## \/pricing/.test(report) && /Stored on another page by an older version/.test(report),
+        report.slice(0, 400),
+      );
+      check("the toolbar count agrees after the upgrade", badge === "3", `badge read "${badge}"`);
 
       await context.close();
     }

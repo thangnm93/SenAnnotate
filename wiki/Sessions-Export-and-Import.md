@@ -12,8 +12,9 @@ about *every* page rather than the one you are looking at.
 Every page you have annotated, with its host and its note count. This is the honest
 answer to *"what did I actually cover?"* at the end of a pass.
 
-Notes are keyed on `origin + pathname`, so this list has one row per screen — not per
-visit, and not per query string.
+Notes are stored under `origin + pathname`, so this list has one row per screen — not per
+visit, and not per query string. (The page's own list is per origin; this view shows how
+that list is filed.)
 
 ---
 

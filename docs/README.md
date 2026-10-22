@@ -222,6 +222,14 @@ button that also cleared was designed and then cut, and the argument is recorded
 rather than lost. Its `changelog.md` records the copy shortcut this feature originally
 carried, and the 0.6.0 binding it collided with.
 
+## [`multi-page-list/`](./multi-page-list/) — unreleased
+
+The annotation list is per origin, so navigating no longer starts an empty one and a review
+can span a whole flow. Its `context.md` is the one to read: the storage layout did not
+change (one key per `origin + pathname`), which is why there is no migration and why the
+popup's export, import and session copy needed no edit; and numbering is per page so pins,
+panel and report agree. `changelog.md` records the test-isolation change this forced.
+
 ## [`share-export/`](./share-export/) — unreleased
 
 A review two people could not previously receive: someone without the extension, and

@@ -18,8 +18,10 @@
 // =============================================================================
 
 import {
+  groupByPage,
   isDone,
   kindOf,
+  type PageGroup,
   type ActionEntry,
   type Annotation,
   type BoxModel,
@@ -265,13 +267,26 @@ function describeStack(page: PageFrameworkInfo | null): string | null {
 // Header
 // -----------------------------------------------------------------------------
 
-function renderHeader(context: OutputContext, detail: OutputDetailLevel): string[] {
+/**
+ * One page's report names that page, whichever page the copy happened on; a list that
+ * spans pages names the site and lets each group name its own path.
+ */
+function renderHeader(
+  context: OutputContext,
+  detail: OutputDetailLevel,
+  groups: PageGroup[],
+): string[] {
   const viewport = `${window.innerWidth}×${window.innerHeight}`;
   const stack = describeStack(context.page);
-  const lines = [`## Page feedback: ${context.pathname}`];
+  const multi = groups.length > 1;
+  const url = new URL(context.href);
+  const single = groups[0].pathname;
+  const title = multi ? `${url.origin} — ${groups.length} pages` : single;
+  const lines = [`## Page feedback: ${title}`];
 
   if (detail === "forensic") {
-    lines.push("", "**Environment:**", `- URL: ${context.href}`);
+    const href = multi || single === context.pathname ? context.href : `${url.origin}${single}`;
+    lines.push("", "**Environment:**", `- ${multi ? "Copied from" : "URL"}: ${href}`);
     if (stack) lines.push(`- Stack: ${stack}`);
     if (context.page?.routePath) lines.push(`- Route: ${context.page.routePath}`);
     lines.push(
@@ -619,16 +634,28 @@ export function generateOutput(
 ): string {
   if (!annotations.length) return "";
 
-  const lines = renderHeader(context, detailLevel);
-
-  // Numbers follow the open notes, so "note 3" means the third thing still to do.
-  const open = annotations.filter((annotation) => !isDone(annotation));
+  const groups = groupByPage(annotations, context.pathname, context.pathname);
+  const multi = groups.length > 1;
+  const lines = renderHeader(context, detailLevel, groups);
   const done = annotations.filter((annotation) => isDone(annotation));
 
-  open.forEach((annotation, index) => {
-    if (detailLevel === "compact") lines.push(renderCompact(annotation, index + 1));
-    else lines.push(...renderAnnotation(annotation, index + 1, detailLevel));
-  });
+  for (const group of groups) {
+    if (multi) lines.push("---", "", `## ${group.pathname}`, "");
+
+    // Numbers follow the open notes, so "note 3" means the third thing still to do —
+    // and restart on each page, as the pins on that page do.
+    const open = group.annotations.filter((annotation) => !isDone(annotation));
+    open.forEach((annotation, index) => {
+      if (detailLevel === "compact") lines.push(renderCompact(annotation, index + 1));
+      else lines.push(...renderAnnotation(annotation, index + 1, detailLevel));
+    });
+
+    if (multi && detailLevel !== "compact") {
+      lines.push(...renderDone(group.annotations.filter((annotation) => isDone(annotation))));
+    } else if (multi) {
+      lines.push("");
+    }
+  }
 
   const actions = context.actions ?? [];
   const diagnostics = context.diagnostics;
@@ -656,7 +683,7 @@ export function generateOutput(
   // outranks a console error the reader may not have to do anything about.
   lines.push(...formatCssChanges(context.cssChanges ?? []));
 
-  lines.push(...renderDone(done));
+  if (!multi) lines.push(...renderDone(done));
 
   if (actions.length || logCount || requestCount) {
     lines.push("---", "", ...renderActions(actions));

@@ -197,7 +197,7 @@ export class SettingsCard {
         this.toggle(
           "clearOnCopy",
           "Clear after copying",
-          "Empties the page's annotations once a copy has reached the clipboard, ready for the next round. Off by default — a failed copy never clears.",
+          "Empties this site's annotations, on every page, once a copy has reached the clipboard, ready for the next round. Off by default — a failed copy never clears.",
         ),
         this.hideUntilRestartRow(),
 

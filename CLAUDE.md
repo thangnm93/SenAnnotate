@@ -138,9 +138,11 @@ round-trip, and works identically with no framework at all. Keep it that way.
   unrelated.
 - **A fixture another block annotates cannot carry a count assertion.**
   `chrome.storage.local` is shared across every page in the suite's single browser context
-  and annotations are keyed on `origin + pathname`, so a page opens with whatever an earlier
-  block left on it. Four assertions failed exactly this way in 0.6.0
-  (`docs/annotation-triage/changelog.md`); the fix is a fixture of your own.
+  and the notes list is per *origin*, so a page opens with whatever an earlier block left on
+  that origin. Four assertions failed exactly this way in 0.6.0
+  (`docs/annotation-triage/changelog.md`); the fix is a fixture of your own. `e2e.mjs` gives
+  each fixture file its own origin (`at("file.html")`, `http://<file>.localhost:<port>`), so
+  a new fixture is isolated by being new — never write `${base}/…` for a page that counts.
 - **Never call a permission-gated API from the extension popup in the suite.**
   `context.grantPermissions(…, { origin: base })` covers the fixture origin, not
   `chrome-extension://`, and `navigator.clipboard.readText()` there raises a prompt nothing
@@ -173,8 +175,10 @@ round-trip, and works identically with no framework at all. Keep it that way.
 - **Privacy guarantees have tests and must not regress:** field *values* are never recorded
   (the trail says `Edited Password`), request/response bodies are never recorded, and
   credential-looking query params are `[redacted]` before storage.
-- Annotations are keyed on `origin + pathname` — query string deliberately excluded. Settings
-  go in `chrome.storage.sync`, annotations in `local`. Both keys live in `shared/protocol.ts`
+- Annotations are stored one key per `origin + pathname` — query string deliberately
+  excluded — and a page loads every key of its origin as one list (`content/storage.ts`);
+  each note carries its `pathname`, and only the notes of the current path are pinned.
+  Settings go in `chrome.storage.sync`, annotations in `local`. Both keys live in `shared/protocol.ts`
   because the popup needs the same strings.
 - Chrome 111 minimum (`world: "MAIN"`); esbuild targets `chrome111`.
 

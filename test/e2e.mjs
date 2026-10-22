@@ -130,6 +130,16 @@ async function main() {
   const base = `http://127.0.0.1:${port}`;
   const profile = mkdtempSync(join(tmpdir(), "senannotate-e2e-"));
 
+  // One origin per fixture file. The notes list spans every page of an origin and
+  // `chrome.storage.local` is shared by the whole suite, so fixtures on one origin would
+  // each open with whatever the blocks before them left behind — the isolation that
+  // `origin + pathname` keying gave for free until the list went per-origin. `*.localhost`
+  // resolves to loopback without a hosts entry, so every origin still reaches `server`.
+  // Blocks that load the same fixture twice still share its notes, as they always did;
+  // the multi-page block deliberately puts two paths on one origin.
+  const siteOf = (file) => `http://${file.replace(/[^a-z0-9]+/gi, "-")}.localhost:${port}`;
+  const at = (file) => `${siteOf(file)}/${file}`;
+
   // Extensions require a persistent context. Headed is the default because it is the
   // configuration users run in; `SENANNOTATE_HEADLESS=1` swaps in Chrome's *new* headless,
   // which — unlike the old headless shell this comment used to rule out — does load
@@ -141,13 +151,13 @@ async function main() {
   });
 
   try {
-    await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: base });
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
 
     // -------------------------------------------------------------------------
     // Vue 3
     // -------------------------------------------------------------------------
     const page = await context.newPage();
-    await page.goto(`${base}/vue3-app.html`);
+    await page.goto(at(`vue3-app.html`));
     await page.waitForSelector(".base-button");
 
     const toolbar = page.locator(".toolbar");
@@ -301,7 +311,7 @@ async function main() {
     // switching the dropdown afterwards adds nothing to an existing annotation.
 
     const forensic = await context.newPage();
-    await forensic.goto(`${base}/vue3-app.html`);
+    await forensic.goto(at(`vue3-app.html`));
     await forensic.waitForSelector(".base-button");
     await forensic.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
     await forensic.waitForTimeout(800);
@@ -391,7 +401,7 @@ async function main() {
     // vite-plugin-vue-tracer (current Nuxt DevTools)
     // -------------------------------------------------------------------------
     const tracer = await context.newPage();
-    await tracer.goto(`${base}/vue3-tracer.html`);
+    await tracer.goto(at(`vue3-tracer.html`));
     await tracer.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
 
     check(
@@ -427,7 +437,7 @@ async function main() {
     // Vue 2 shape
     // -------------------------------------------------------------------------
     const legacy = await context.newPage();
-    await legacy.goto(`${base}/vue2-app.html`);
+    await legacy.goto(at(`vue2-app.html`));
     await legacy.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
 
     const legacyBadge = (await legacy.locator(".stack-badge").textContent())?.trim() ?? "";
@@ -454,7 +464,7 @@ async function main() {
     // Marquee — contained + outermost
     // -------------------------------------------------------------------------
     const marquee = await context.newPage();
-    await marquee.goto(`${base}/marquee.html`);
+    await marquee.goto(at(`marquee.html`));
     await marquee.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
     await marquee.locator(".tool--brand").click();
 
@@ -603,7 +613,7 @@ async function main() {
     // across this context and annotations are keyed on origin + pathname, so a page
     // another block has been through opens with that block's leftovers.
     const measure = await context.newPage();
-    await measure.goto(`${base}/measure.html`);
+    await measure.goto(at(`measure.html`));
     await measure.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
     await measure.locator(".tool--brand").click();
 
@@ -1113,7 +1123,7 @@ async function main() {
     // that already had an inline padding (revert must PUT THAT BACK). Getting the second
     // wrong leaves the page in a state it was never in, and looks correct on the first.
     const edit = await context.newPage();
-    await edit.goto(`${base}/css-edit.html`);
+    await edit.goto(at(`css-edit.html`));
     await edit.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
     await edit.locator(".tool--brand").click();
 
@@ -1321,7 +1331,7 @@ async function main() {
     // Its own fixture, and a tall one: guides are stored in document coordinates and the
     // only way to show that is to scroll.
     const ruled = await context.newPage();
-    await ruled.goto(`${base}/rulers.html`);
+    await ruled.goto(at(`rulers.html`));
     await ruled.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
     await ruled.locator(".tool--brand").click();
 
@@ -1613,7 +1623,7 @@ async function main() {
     // Playwright resolves this one per platform — on macOS a real Ctrl+click is a
     // right-click and never delivers the `click` this depends on.
     const pick = await context.newPage();
-    await pick.goto(`${base}/pick.html`);
+    await pick.goto(at(`pick.html`));
     await pick.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
     await pick.locator(".tool--brand").click();
 
@@ -1728,7 +1738,7 @@ async function main() {
     // `paste` carries, and without it the event could not leave the shadow root at all,
     // which would make the containment check below pass for the wrong reason.
     const reference = await context.newPage();
-    await reference.goto(`${base}/reference.html`);
+    await reference.goto(at(`reference.html`));
     await reference.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
     await reference.locator(".tool--brand").click();
     await reference.locator(".cta").click({ timeout: 5_000 });
@@ -1827,7 +1837,7 @@ async function main() {
     // The modal is opened with inspect mode OFF, because inspect mode correctly
     // swallows page-directed clicks.
     const modal = await context.newPage();
-    await modal.goto(`${base}/modal.html`);
+    await modal.goto(at(`modal.html`));
     await modal.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
 
     const modalOpen = () =>
@@ -1931,7 +1941,7 @@ async function main() {
     //
     // No `Escape` anywhere in this block — a native dialog closes on it.
     const native = await context.newPage();
-    await native.goto(`${base}/modal-native.html`);
+    await native.goto(at(`modal-native.html`));
     await native.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
 
     const nativeCloseLog = () => native.evaluate(() => window.__closeLog.join(", "));
@@ -2049,7 +2059,7 @@ async function main() {
 
     // Variant A — closes when focus leaves the dialog.
     const focusClose = await context.newPage();
-    await focusClose.goto(`${base}/modal-focus.html`);
+    await focusClose.goto(at(`modal-focus.html`));
     await focusClose.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
 
     const closeOpen = () =>
@@ -2105,7 +2115,7 @@ async function main() {
 
     // Variant B — a real focus trap, which restores focus rather than closing.
     const focusTrap = await context.newPage();
-    await focusTrap.goto(`${base}/modal-focus.html`);
+    await focusTrap.goto(at(`modal-focus.html`));
     await focusTrap.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
 
     const trapOpen = () =>
@@ -2145,7 +2155,7 @@ async function main() {
     // trap sees the `relatedTarget === null` it is required to ignore.
     // `docs/modal-trap-refocus/`.
     const focusOutTrap = await context.newPage();
-    await focusOutTrap.goto(`${base}/modal-focus.html`);
+    await focusOutTrap.goto(at(`modal-focus.html`));
     await focusOutTrap.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
 
     const outTrapOpen = () =>
@@ -2191,7 +2201,7 @@ async function main() {
     // A negative `style.left` is the clamp having engaged, which is also the proof the
     // overflow was real: without the shift the label would have been exactly that far out.
     const edge = await context.newPage();
-    await edge.goto(`${base}/label-edge.html`);
+    await edge.goto(at(`label-edge.html`));
     await edge.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
     await edge.locator(".tool--brand").click();
     const viewportWidth = await edge.evaluate(() => window.innerWidth);
@@ -2235,7 +2245,7 @@ async function main() {
     // to annotate it is impossible to do *and* observe: the click is what closes the
     // thing. `C` is the whole feature — capture without moving or pressing.
     const hover = await context.newPage();
-    await hover.goto(`${base}/hover-menu.html`);
+    await hover.goto(at(`hover-menu.html`));
     await hover.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
     await hover.locator(".tool--brand").click();
 
@@ -2273,7 +2283,7 @@ async function main() {
 
     // Pressing it over nothing must say so rather than looking broken.
     const empty = await context.newPage();
-    await empty.goto(`${base}/plain.html`);
+    await empty.goto(at(`plain.html`));
     await empty.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
     await empty.locator(".tool--brand").click();
     await empty.keyboard.press("c");
@@ -2295,7 +2305,7 @@ async function main() {
     // no permission at all. That is easy to "fix" by adding the permission back, and the
     // Web Store rejects unnecessary permissions — so the path is pinned here.
     const shooter = await context.newPage();
-    await shooter.goto(`${base}/vue3-app.html`);
+    await shooter.goto(at(`vue3-app.html`));
     await shooter.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
     await shooter.locator(".tool--brand").click();
     await shooter.locator(".base-button").first().click();
@@ -2368,7 +2378,7 @@ async function main() {
     // Diagnostics — the tester workflow on a page that misbehaves
     // -------------------------------------------------------------------------
     const buggy = await context.newPage();
-    await buggy.goto(`${base}/buggy.html`);
+    await buggy.goto(at(`buggy.html`));
     await buggy.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
 
     // Use the app first, the way a tester would, before reaching for the toolbar.
@@ -2458,7 +2468,7 @@ async function main() {
     // on) records the owner's props. Forensic detail renders them, so this is where a
     // password would surface if the redaction in the detector dispatcher failed.
     const privacy = await context.newPage();
-    await privacy.goto(`${base}/react-input.html`);
+    await privacy.goto(at(`react-input.html`));
     await privacy.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
     await privacy.waitForTimeout(800);
 
@@ -2500,7 +2510,7 @@ async function main() {
 
     for (const variant of ["stock", "devtools", "tracer"]) {
       const prod = await context.newPage();
-      await prod.goto(`${base}/prod/${variant}/index.html`);
+      await prod.goto(at(`prod/${variant}/index.html`));
       await prod.waitForSelector(".base-button");
       await prod.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
       await prod.waitForTimeout(1_200);
@@ -2569,7 +2579,7 @@ async function main() {
     // Served over http rather than `setContent`, which would leave the page on
     // about:blank where content scripts do not run.
     const plain = await context.newPage();
-    await plain.goto(`${base}/plain.html`);
+    await plain.goto(at(`plain.html`));
     await plain.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
 
     // The retry in boot() waits 1.5s before giving up on a late-hydrating app.
@@ -2618,7 +2628,7 @@ async function main() {
     // `div` — daisyUI does the first — used to paint our fixed, full-viewport host
     // opaque and hide the whole site behind it.
     const themed = await context.newPage();
-    await themed.goto(`${base}/themed-host.html`);
+    await themed.goto(at(`themed-host.html`));
     await themed.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
 
     const hostPaint = await themed.evaluate(() => {
@@ -2672,7 +2682,7 @@ async function main() {
      */
     async function driveFramework(path, selector) {
       const page = await context.newPage();
-      await page.goto(`${base}/${path}`);
+      await page.goto(at(`${path}`));
       await page.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
       await page.waitForTimeout(2_000); // outwait boot()'s late-hydration retry
 
@@ -2798,7 +2808,7 @@ async function main() {
     // leaving `showMarkers` off would silently break every later `.marker` assertion,
     // the same way a stray `toolbarCollapsed` would break every `.tool--brand` click.
     const settingsPageUnderTest = await context.newPage();
-    await settingsPageUnderTest.goto(`${base}/settings.html`);
+    await settingsPageUnderTest.goto(at(`settings.html`));
     await settingsPageUnderTest.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
 
     const card = settingsPageUnderTest.locator(".settings");
@@ -2993,7 +3003,7 @@ async function main() {
     // A different page is a different tab as far as the user is concerned — the
     // toolbar must be there.
     const otherTab = await context.newPage();
-    await otherTab.goto(`${base}/plain.html`);
+    await otherTab.goto(at(`plain.html`));
     await otherTab.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
     check("another tab still shows the toolbar", await otherTab.locator(".toolbar").isVisible());
     await otherTab.close();
@@ -3045,7 +3055,7 @@ async function main() {
     // extension icon when X-hidden restores the overlay without toggling inspect;
     // `H` does nothing while hidden; "Hide until restart" is unaffected.
     const closeXPage = await context.newPage();
-    await closeXPage.goto(`${base}/close-x.html`);
+    await closeXPage.goto(at(`close-x.html`));
     await closeXPage.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
 
     const closeXButton = closeXPage.locator(".tool--close");
@@ -3159,7 +3169,7 @@ async function main() {
     // marquee.html is used because it has no stored annotations — its own scenario
     // escapes every composer it opens.
     const collapsed = await context.newPage();
-    await collapsed.goto(`${base}/marquee.html`);
+    await collapsed.goto(at(`marquee.html`));
     await collapsed.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
 
     const dock = collapsed.locator(".toolbar-dock");
@@ -3296,7 +3306,7 @@ async function main() {
     // **submitting after a retarget stores the new element**, and a retarget cannot land in
     // a composer it was not started from. Both are invisible until the report is read.
     const retarget = await context.newPage();
-    await retarget.goto(`${base}/retarget.html`);
+    await retarget.goto(at(`retarget.html`));
     await retarget.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
     await retarget.locator(".tool--brand").click();
 
@@ -3449,7 +3459,7 @@ async function main() {
     // careful to restore. It ends expanded, with inspect mode off, for that reason.
     const drag = await context.newPage();
     await drag.setViewportSize({ width: 1280, height: 900 });
-    await drag.goto(`${base}/drag.html`);
+    await drag.goto(at(`drag.html`));
     await drag.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
     await drag.waitForTimeout(600); // settings and the stored position load async
 
@@ -3636,7 +3646,7 @@ async function main() {
     // Per page, not per user — the whole argument for `local` over `sync`. Read-only on
     // a fixture another block owns, so nothing is left behind on it.
     const untouched = await context.newPage();
-    await untouched.goto(`${base}/pick.html`);
+    await untouched.goto(at(`pick.html`));
     await untouched.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
     await untouched.waitForTimeout(600);
     check(
@@ -3752,7 +3762,7 @@ async function main() {
     // shared across the whole context, so a page an earlier block annotated starts
     // this one with notes already on it.
     const triage = await context.newPage();
-    await triage.goto(`${base}/triage.html`);
+    await triage.goto(at(`triage.html`));
     await triage.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
     await triage.locator(".tool--brand").click();
 
@@ -3820,7 +3830,7 @@ async function main() {
     // Iframes — the document the top frame cannot reach into
     // -------------------------------------------------------------------------
     const framed = await context.newPage();
-    await framed.goto(`${base}/frames.html`);
+    await framed.goto(at(`frames.html`));
     await framed.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
 
     check(
@@ -3959,7 +3969,7 @@ async function main() {
 
     if (accentExtensionId) {
       const accented = await context.newPage();
-      await accented.goto(`${base}/accent.html`);
+      await accented.goto(at(`accent.html`));
       await accented.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
       await accented.locator(".tool--brand").click();
 
@@ -4107,7 +4117,7 @@ async function main() {
           const [tab] = await chrome.tabs.query({ url: `${origin}/accent.html` });
           if (!tab?.id) return null;
           return chrome.action.getBadgeBackgroundColor({ tabId: tab.id });
-        }, base)
+        }, siteOf("accent.html"))
         .catch(() => null);
       check(
         "the toolbar badge is painted in the chosen colour",
@@ -4151,7 +4161,7 @@ async function main() {
     // is `copyReport`'s `if (!copied) { toast("Copy failed"); return; }`, and it was
     // verified by hand against a bundle with both routes stubbed out.
     const clearPage = await context.newPage();
-    await clearPage.goto(`${base}/clear-copy.html`);
+    await clearPage.goto(at(`clear-copy.html`));
     await clearPage.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
 
     const clearMarkers = () => clearPage.locator(".marker").count();
@@ -4372,7 +4382,7 @@ async function main() {
     await clearPage.close();
 
     // -------------------------------------------------------------------------
-    // SPA navigation — annotations must be isolated per pathname
+    // SPA navigation — notes follow the origin, pins stay on their own page
     // -------------------------------------------------------------------------
     //
     // Regression for the bug where `annotations` was loaded once in `boot()` and
@@ -4385,7 +4395,7 @@ async function main() {
     // interval can observe the change without a real load.
     {
       const spaNav = await context.newPage();
-      await spaNav.goto(`${base}/spa-nav.html`);
+      await spaNav.goto(at(`spa-nav.html`));
       await spaNav.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
 
       // Turn on inspect mode.
@@ -4429,7 +4439,7 @@ async function main() {
       await spaNav.waitForTimeout(800);
 
       check(
-        "SPA page B starts with no annotations (isolation)",
+        "SPA page B shows no pins for page A's note",
         (await spaNav.locator(".marker").count()) === 0,
         `${await spaNav.locator(".marker").count()} markers on page B — expected 0`,
       );
@@ -4444,9 +4454,14 @@ async function main() {
       await spaNav.locator(".composer").waitFor({ state: "detached", timeout: 5_000 });
 
       check(
-        "SPA page B accepts a new annotation",
+        "SPA page B accepts a new annotation and pins only its own",
         (await spaNav.locator(".marker").count()) === 1,
         `${await spaNav.locator(".marker").count()} markers on page B`,
+      );
+      check(
+        "SPA page B's count badge carries page A's note too",
+        (await spaNav.locator(".count").textContent()) === "2",
+        `count reads "${await spaNav.locator(".count").textContent()}"`,
       );
 
       // SPA-navigate back to page A (same approach: bypass inspect-mode click interception).
@@ -4463,12 +4478,173 @@ async function main() {
         `${await spaNav.locator(".marker").count()} markers on page A after return — expected 1`,
       );
       check(
-        "SPA page A count badge still shows 1 after returning",
-        (await spaNav.locator(".count").textContent()) === "1",
+        "SPA count badge counts both pages' notes after returning",
+        (await spaNav.locator(".count").textContent()) === "2",
         `count reads "${await spaNav.locator(".count").textContent()}"`,
       );
 
       await spaNav.close();
+    }
+
+    // -------------------------------------------------------------------------
+    // One list per origin — notes follow the user from page to page
+    // -------------------------------------------------------------------------
+    //
+    // Two real documents (multi-a.html, multi-b.html) on one origin of their own, because
+    // this block counts every note the origin holds. A full navigation rather than
+    // `pushState`: it is the case that reloads the content script and has to bring the
+    // list back out of storage, which the SPA block above cannot show.
+    {
+      const origin = siteOf("multi-page");
+      const pageA = `${origin}/multi-a.html`;
+      const pageB = `${origin}/multi-b.html`;
+
+      const list = await context.newPage();
+      await list.goto(pageA);
+      await list.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
+
+      const pins = () => list.locator(".marker").count();
+      const badge = async () => ((await list.locator(".count").textContent()) ?? "").trim();
+      const toast = async () => ((await list.locator(".toast").last().textContent()) ?? "").trim();
+
+      const annotateHere = async (selector, comment) => {
+        await list.locator(".tool--brand").click();
+        await list.locator(selector).click();
+        await list.locator(".composer").waitFor({ state: "visible", timeout: 5_000 });
+        await list.locator(".composer__input").fill(comment);
+        await list.locator(".composer .button--primary").click();
+        await list.locator(".composer").waitFor({ state: "detached", timeout: 5_000 });
+        await list.locator(".tool--brand").click();
+      };
+
+      const openPanel = async () => {
+        if (!(await list.locator(".panel").count())) {
+          await list.locator('.tool[aria-label^="Annotations"]').click();
+          await list.locator(".panel").waitFor({ state: "visible", timeout: 5_000 });
+        }
+        await list.waitForTimeout(600);
+      };
+
+      const setClear = async (on) => {
+        await list.locator(".tool--settings").click();
+        await list.locator(".settings").waitFor({ state: "visible", timeout: 5_000 });
+        const box = list.locator('.settings [data-setting="clearOnCopy"]');
+        const before = await box.isChecked();
+        if (before !== on) await box.click();
+        await list.locator(".tool--settings").click();
+        await list.locator(".settings").waitFor({ state: "detached", timeout: 5_000 });
+        await list.waitForTimeout(300);
+        return before;
+      };
+
+      await annotateHere("#a-one", "Note filed on page A.");
+      check("page A pins its own note", (await pins()) === 1 && (await badge()) === "1");
+
+      await list.goto(pageB);
+      await list.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
+      check(
+        "page B opens with page A's note still in the list",
+        (await badge()) === "1",
+        `badge read "${await badge()}"`,
+      );
+      check(
+        "but pins nothing for it — its element is not on this page",
+        (await pins()) === 0,
+        `${await pins()} pins on page B`,
+      );
+
+      await openPanel();
+      check(
+        "the panel lists page A's note, labelled with its page",
+        (await list.locator(".panel .entry").count()) === 1 &&
+          (await list.locator('.panel__page[data-here="false"]').textContent())?.trim() === "/multi-a.html",
+        `${await list.locator(".panel .entry").count()} entries`,
+      );
+
+      await list.locator(".panel .entry").first().click();
+      await list.waitForTimeout(300);
+      check(
+        "selecting a note from another page says so instead of opening an editor",
+        (await list.locator(".composer").count()) === 0 && /\/multi-a\.html/.test(await toast()),
+        `toast read "${await toast()}"`,
+      );
+
+      await annotateHere("#b-one", "Note filed on page B.");
+      check(
+        "page B pins only its own note, and the badge counts both",
+        (await pins()) === 1 && (await badge()) === "2",
+        `${await pins()} pins, badge read "${await badge()}"`,
+      );
+      await openPanel();
+      check(
+        "the panel leads with this page, then the other",
+        (await list.locator(".panel__page").allTextContents()).map((text) => text.trim()).join("|") ===
+          "/multi-b.html · this page|/multi-a.html",
+      );
+
+      await list.goto(pageA);
+      await list.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
+      check(
+        "back on page A it pins A's note only, and still counts both",
+        (await pins()) === 1 && (await badge()) === "2",
+        `${await pins()} pins, badge read "${await badge()}"`,
+      );
+
+      // Default path first: with "clear after copying" off, a copy hands the report over
+      // and leaves the list alone, exactly as before — and carries both pages in it.
+      await openPanel();
+      await list.locator(".panel .button--primary").click();
+      await list.waitForTimeout(400);
+      const kept = await list.evaluate(() => navigator.clipboard.readText());
+      check(
+        "one report carries every page's notes, grouped by page",
+        /Page feedback: .*2 pages/.test(kept) &&
+          kept.indexOf("## /multi-a.html") !== -1 &&
+          kept.indexOf("## /multi-b.html") > kept.indexOf("## /multi-a.html") &&
+          kept.includes("Note filed on page A.") &&
+          kept.includes("Note filed on page B."),
+        kept.slice(0, 300),
+      );
+      check("with the setting off the copy leaves the list alone", (await badge()) === "2");
+
+      const wasOn = await setClear(true);
+      await openPanel();
+      await list.locator(".panel .button--primary").click();
+      await list.waitForTimeout(600);
+      check(
+        "a copy that clears empties the whole origin's list",
+        (await badge()) === "0" && (await pins()) === 0 && /· cleared$/.test(await toast()),
+        `badge read "${await badge()}", toast read "${await toast()}"`,
+      );
+
+      await list.goto(pageB);
+      await list.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
+      check(
+        "and the other page is empty too, so the clear reached storage",
+        (await badge()) === "0" && (await pins()) === 0,
+        `badge read "${await badge()}"`,
+      );
+
+      // Clear all is the same list: notes made on two pages, wiped from either.
+      await annotateHere("#b-one", "Second round, page B.");
+      await list.goto(pageA);
+      await list.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
+      await annotateHere("#a-one", "Second round, page A.");
+      check("a second round fills the list again", (await badge()) === "2", `badge read "${await badge()}"`);
+
+      await openPanel();
+      await list.locator('.panel .icon-button[title^="Clear all"]').click();
+      await list.waitForTimeout(400);
+      await list.goto(pageB);
+      await list.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
+      check(
+        "Clear all empties every page's notes, not only this page's",
+        (await badge()) === "0",
+        `badge read "${await badge()}" on page B after clearing from page A`,
+      );
+
+      if (wasOn === false) await setClear(false);
+      await list.close();
     }
 
     // -------------------------------------------------------------------------
@@ -4739,7 +4915,7 @@ async function main() {
 
       check(
         "a remapped import says which origin it landed on",
-        (await popup.locator("#archive-hint").textContent())?.includes(`moved onto ${base}`) ?? false,
+        (await popup.locator("#archive-hint").textContent())?.includes(`moved onto ${siteOf("triage.html")}`) ?? false,
         `hint read "${(await popup.locator("#archive-hint").textContent())?.trim() ?? ""}"`,
       );
 
@@ -4770,7 +4946,7 @@ async function main() {
     // message over `chrome.tabs.sendMessage`. Only the native menu widget is simulated.
     if (extensionId && worker) {
       const ctx = await context.newPage();
-      await ctx.goto(`${base}/context-menu.html`);
+      await ctx.goto(at(`context-menu.html`));
       await ctx.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
 
       const ctxDock = ctx.locator(".toolbar-dock");
@@ -4847,7 +5023,7 @@ async function main() {
               { frameId: 0 },
             );
           },
-          [`${base}/context-menu.html`, selection, selectionText, inFrame],
+          [at("context-menu.html"), selection, selectionText, inFrame],
         );
         await ctx.waitForTimeout(600);
       };

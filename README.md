@@ -247,8 +247,9 @@ adds it and opens the composer, or by pressing <kbd>Enter</kbd> to take the set 
 stands. <kbd>Esc</kbd> drops the set without leaving inspect mode. On macOS use
 <kbd>⌘</kbd>: <kbd>Ctrl</kbd>+click there is a right-click.
 
-Annotations are stored per `origin + pathname`, so they survive a reload and come
-back when you return to the same screen. Settings and notes both survive an upgrade —
+Annotations form one list per origin: they survive a reload and follow you from page to
+page of the same site (each is pinned on the page it was made on), and only a clear empties
+the list. Settings and notes both survive an upgrade —
 Chrome keeps them, and the storage keys have not moved since 0.2.0.
 
 **Accent colour.** The extension is orange by default; the settings card's *Appearance* section
@@ -275,7 +276,7 @@ moment a demo or a screen-share needs the page clean without turning the extensi
 everywhere. The card's footer shows which version you are running, so a bug report can
 name it.
 
-**Clear after copy** is off by default. Turned on, the page's notes are emptied once a
+**Clear after copy** is off by default. Turned on, the site's notes (every page's) are emptied once a
 copy has actually reached the clipboard — not merely once you asked for one — so the next
 round starts clean. It drops the action trail and the diagnostics with them, exactly as
 *Clear all* does.

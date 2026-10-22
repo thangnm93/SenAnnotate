@@ -2,31 +2,52 @@
 // Persistence
 // =============================================================================
 //
-// Annotations are scoped to `origin + pathname` so that reloading the page you
-// were reviewing brings your notes back, while navigating elsewhere starts clean.
-// The query string is deliberately excluded — `?page=2` is the same screen.
+// The list is per origin: every page of a site feeds the same list, so navigating
+// does not reset it and only clearing it (Copy with "clear after copying", or Clear
+// all) empties it. The storage layout did not change to get there — a note is still
+// stored under `origin + pathname` (the query string is deliberately excluded:
+// `?page=2` is the same screen), which is what keeps the popup's export, import and
+// session copy working and means nothing written by an older build needs migrating.
+// This module reads every key of the current origin as one list and writes it back
+// split by page.
 //
 // Settings go in `chrome.storage.sync` so they follow the user between machines;
 // annotations stay in `local`, which has room for them.
 // =============================================================================
 
 import { ANNOTATION_PREFIX, COMPOSER_DOCK_PREFIX, DOCK_PREFIX, SETTINGS_KEY } from "../shared/protocol";
-import { DEFAULT_SETTINGS, type Annotation, type Settings } from "../shared/types";
+import { DEFAULT_SETTINGS, groupByPage, type Annotation, type Settings } from "../shared/types";
 
-export function pageKey(): string {
-  return `${ANNOTATION_PREFIX}${location.origin}${location.pathname}`;
+function keyFor(pathname: string): string {
+  return `${ANNOTATION_PREFIX}${location.origin}${pathname}`;
 }
 
 // -----------------------------------------------------------------------------
 // Annotations
 // -----------------------------------------------------------------------------
 
+/**
+ * The keys this tab read or wrote, so a save can remove a page that has just been
+ * emptied without sweeping keys a second tab added in the meantime.
+ */
+let knownKeys = new Set<string>();
+
 export async function loadAnnotations(): Promise<Annotation[]> {
   try {
-    const key = pageKey();
-    const stored = await chrome.storage.local.get(key);
-    const value = stored[key];
-    return Array.isArray(value) ? (value as Annotation[]) : [];
+    // The trailing slash keeps `https://a.com` from matching `https://a.com.evil/x`.
+    const prefix = `${ANNOTATION_PREFIX}${location.origin}/`;
+    const stored = await chrome.storage.local.get(null);
+    const list: Annotation[] = [];
+    knownKeys = new Set();
+
+    for (const [key, value] of Object.entries(stored)) {
+      if (!key.startsWith(prefix) || !Array.isArray(value)) continue;
+      knownKeys.add(key);
+      const pathname = key.slice(ANNOTATION_PREFIX.length + location.origin.length);
+      for (const annotation of value as Annotation[]) list.push({ ...annotation, pathname });
+    }
+
+    return list.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   } catch {
     // Extension context invalidated (a reload while the page was open).
     return [];
@@ -34,13 +55,12 @@ export async function loadAnnotations(): Promise<Annotation[]> {
 }
 
 /**
- * Ceiling on one page's stored annotations.
+ * Ceiling on one origin's stored annotations.
  *
  * `chrome.storage.local` allows 10 MB across every key. An embedded screenshot is
- * 60-120 KB of base64 and there is one key per page, so a few heavily-photographed
- * pages could reach it — and `set()` failing here means *every* note on the page
- * silently stops persisting, not just the images. 4 MB leaves room for the other
- * pages and is far more than a review of one screen needs.
+ * 60-120 KB of base64, so a few heavily-photographed sites could reach it — and
+ * `set()` failing here means *every* note stops persisting, not just the images. 4 MB
+ * leaves room for the other sites and is far more than a review of one needs.
  */
 const MAX_STORED_BYTES = 4_000_000;
 
@@ -88,45 +108,19 @@ function fitToQuota(annotations: Annotation[]): { payload: Annotation[]; dropped
 
 export async function saveAnnotations(annotations: Annotation[]): Promise<SaveResult> {
   try {
-    const key = pageKey();
-    if (!annotations.length) {
-      await chrome.storage.local.remove(key);
-      return { ok: true, droppedImages: 0 };
+    const { payload, dropped } = fitToQuota(annotations);
+    const pages: Record<string, Annotation[]> = {};
+    for (const group of groupByPage(payload, location.pathname)) {
+      pages[keyFor(group.pathname)] = group.annotations;
     }
 
-    const { payload, dropped } = fitToQuota(annotations);
-    await chrome.storage.local.set({ [key]: payload });
+    const emptied = [...knownKeys].filter((key) => !(key in pages));
+    if (Object.keys(pages).length) await chrome.storage.local.set(pages);
+    if (emptied.length) await chrome.storage.local.remove(emptied);
+    knownKeys = new Set(Object.keys(pages));
     return { ok: true, droppedImages: dropped };
   } catch {
     // Nothing useful to do — the in-memory list is still intact.
-    return { ok: false, droppedImages: 0 };
-  }
-}
-
-/**
- * Persist annotations under the key for `href` rather than the current URL.
- *
- * Needed for SPA navigation: by the time `location.href` has changed the old
- * page's URL is gone, so `saveAnnotations()` would write to the wrong key.
- * Callers pass the *previous* href so page A's annotations reach page A's slot
- * before page B is loaded.
- */
-export async function saveAnnotationsForUrl(
-  annotations: Annotation[],
-  href: string,
-): Promise<SaveResult> {
-  try {
-    const { origin, pathname } = new URL(href);
-    const key = `${ANNOTATION_PREFIX}${origin}${pathname}`;
-    if (!annotations.length) {
-      await chrome.storage.local.remove(key);
-      return { ok: true, droppedImages: 0 };
-    }
-
-    const { payload, dropped } = fitToQuota(annotations);
-    await chrome.storage.local.set({ [key]: payload });
-    return { ok: true, droppedImages: dropped };
-  } catch {
     return { ok: false, droppedImages: 0 };
   }
 }

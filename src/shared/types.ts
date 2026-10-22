@@ -69,6 +69,36 @@ export function isDone(annotation: Pick<Annotation, "status">): boolean {
   return annotation.status === "done";
 }
 
+/** The page a note belongs to; absent only on a note that has not been through storage yet. */
+export function pathOf(annotation: Pick<Annotation, "pathname">, fallback: string): string {
+  return annotation.pathname ?? fallback;
+}
+
+export interface PageGroup {
+  pathname: string;
+  annotations: Annotation[];
+}
+
+/**
+ * Split one origin's notes by page, in order of first appearance, `first` leading if present.
+ *
+ * Numbers are per page — a pin on `/cart` reads 1, 2, 3 whatever was noted on `/home` —
+ * so the panel, the pins and the report all number a group, never the whole list.
+ */
+export function groupByPage(annotations: Annotation[], fallback: string, first?: string): PageGroup[] {
+  const groups = new Map<string, Annotation[]>();
+  for (const annotation of annotations) {
+    const pathname = pathOf(annotation, fallback);
+    const group = groups.get(pathname);
+    if (group) group.push(annotation);
+    else groups.set(pathname, [annotation]);
+  }
+  const list = [...groups].map(([pathname, items]) => ({ pathname, annotations: items }));
+  const lead = list.findIndex((group) => group.pathname === first);
+  if (lead > 0) list.unshift(...list.splice(lead, 1));
+  return list;
+}
+
 export interface Rect {
   x: number;
   y: number;
@@ -365,6 +395,13 @@ export interface Annotation {
   id: string;
   comment: string;
   timestamp: number;
+
+  /**
+   * The path of the page the note was made on. The list is per origin, so this is what
+   * says where a note lives. Stamped from the storage key on load, which is why a note
+   * written before the list spanned pages still knows its page.
+   */
+  pathname?: string;
 
   /** Absent means `ui` — see `kindOf`. */
   kind?: AnnotationKind;
