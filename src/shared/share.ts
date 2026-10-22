@@ -169,12 +169,34 @@ function renderAnnotation(annotation: Annotation, number: number): Html {
     picture = html`<p class="note__shot-missing">Screenshot saved as <code>${path}</code> on the reporter's machine — not embedded.</p>`;
   }
 
-  // After the photograph of *now*, same order as the Markdown report: a reference is
-  // what it should look like instead, and putting both under one heading is how an
-  // agent implements the current state on purpose.
+  // After the photograph of *now*, same order as the Markdown report: the delta is
+  // what to do, then the picture of *instead*. Putting the reference under the same
+  // heading as the screenshot is how an agent implements the current state on purpose.
+  const design = renderDesign(annotation);
   const references = renderReferences(annotation);
 
-  return html`<article class="note${done ? " note--done" : ""}"><header class="note__head"><span class="note__number">${number}</span><h3 class="note__title">${annotation.element}</h3><span class="chip chip--${kind}">${kind}</span>${done ? raw(`<span class="chip chip--done">fixed</span>`) : null}</header><p class="note__comment">${annotation.comment}</p>${meta.length ? html`<div class="note__meta">${meta}</div>` : null}${picture}${references}</article>`;
+  return html`<article class="note${done ? " note--done" : ""}"><header class="note__head"><span class="note__number">${number}</span><h3 class="note__title">${annotation.element}</h3><span class="chip chip--${kind}">${kind}</span>${done ? raw(`<span class="chip chip--done">fixed</span>`) : null}</header><p class="note__comment">${annotation.comment}</p>${meta.length ? html`<div class="note__meta">${meta}</div>` : null}${picture}${design}${references}</article>`;
+}
+
+/**
+ * The property table the Markdown report already prints, for a reader who never sees that
+ * report.
+ *
+ * Share-export landed first and had nothing to render here. Dropping the delta from the
+ * one document a designer actually opens would be the same failure the Design section
+ * exists to prevent: the note would again be "tighten this" with no numbers.
+ */
+function renderDesign(annotation: Annotation): Html | null {
+  const changes = annotation.designChanges ?? [];
+  const text = annotation.textChange;
+  if (!changes.length && !text) return null;
+
+  const rows = changes.map(
+    (change) =>
+      html`<tr><th scope="row"><code>${change.property}</code></th><td>${change.from}</td><td><strong>${change.to}</strong></td></tr>`,
+  );
+
+  return html`<div class="note__design"><p class="note__design-label">Design edits — previewed on the page, not applied to the code</p>${changes.length ? html`<table class="note__design-table"><thead><tr><th>Property</th><th>From</th><th>To</th></tr></thead><tbody>${rows}</tbody></table>` : null}${text ? html`<p class="note__design-text">Text: "${text.from}" → <strong>"${text.to}"</strong></p>` : null}</div>`;
 }
 
 /**
@@ -237,6 +259,12 @@ h1 { margin: 0 0 4px; font-size: 22px; }
 .row__value { word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
 .note__shot { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; }
 .note__shot-missing { margin: 0; color: var(--muted); font-size: 12.5px; }
+.note__design { margin: 12px 0 0; }
+.note__design-label { margin: 0 0 8px; color: var(--muted); font-size: 12.5px; }
+.note__design-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.note__design-table th, .note__design-table td { text-align: left; padding: 4px 10px 4px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.note__design-table thead th { color: var(--muted); font-weight: 600; }
+.note__design-text { margin: 8px 0 0; font-size: 12.5px; }
 .note__refs { margin: 12px 0 0; display: grid; gap: 8px; }
 .note__refs-label { margin: 0; color: var(--muted); font-size: 12.5px; }
 .note__ref { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; }
