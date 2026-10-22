@@ -177,6 +177,11 @@ export class SettingsCard {
           "Capture errors & steps",
           "Attaches console errors, failed requests and what you clicked. Field values are never recorded and request bodies never leave the page.",
         ),
+        this.toggle(
+          "debugMode",
+          "Debug log",
+          "Records mode changes, freeze on and off, and which element each click landed on — never text or field values. Save it from the extension popup and send it with a bug report.",
+        ),
 
         this.group("Behaviour"),
         this.toggle(

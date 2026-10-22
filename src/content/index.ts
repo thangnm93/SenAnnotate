@@ -41,6 +41,7 @@ import {
 } from "./bridge";
 import { captureDraft, resolveElement, viewportBoxes, type Draft } from "./capture";
 import { copyText } from "./clipboard";
+import { buildDebugLog, debugLog, debugState, setDebugEnabled, summariseTarget } from "./debug-log";
 import { pickColour } from "./eyedropper";
 import {
   broadcastFrameState,
@@ -131,6 +132,8 @@ let hidden = false;
 let active = false;
 let mode: InspectMode = "point";
 let frozen = false;
+/** Freeze that inspect mode engaged itself, and so releases when inspect ends. */
+let frozenByInspect = false;
 let panelOpen = false;
 
 let hoveredElement: Element | null = null;
@@ -514,6 +517,7 @@ function toggleCssCard(force?: boolean): void {
 }
 
 function render(): void {
+  debugState({ active, mode, frozen, composer: !!composer, panelOpen });
   toolbar.update({
     active,
     mode,
@@ -586,9 +590,15 @@ function setActive(next: boolean): void {
     rightClicked = null;
     rightClickedSelection = null;
     document.body.style.removeProperty("cursor");
+    // Parked timers on a page nobody is inspecting read as a hung tab.
+    if (frozenByInspect && frozen) void toggleFreeze(false);
+    frozenByInspect = false;
   } else {
     document.body.style.setProperty("cursor", "crosshair", "important");
-    if (settings.freezeOnInspect && !frozen) void toggleFreeze(true);
+    if (settings.freezeOnInspect && !frozen) {
+      frozenByInspect = true;
+      void toggleFreeze(true);
+    }
   }
 
   // Frames have no toolbar of their own, so this is the only way they learn that
@@ -600,7 +610,9 @@ function setActive(next: boolean): void {
 async function toggleFreeze(force?: boolean): Promise<void> {
   const next = force ?? !frozen;
   if (next === frozen) return;
+  if (force === undefined) frozenByInspect = false;
   frozen = next;
+  debugLog("freeze", { on: frozen, auto: force !== undefined });
   await setFrozen(frozen);
   ui.toast(frozen ? "Animations frozen" : "Animations resumed");
   render();
@@ -2051,6 +2063,7 @@ async function ensureDetection(): Promise<void> {
 
 async function boot(): Promise<void> {
   settings = await loadSettings();
+  setDebugEnabled(settings.debugMode);
   applyAppearance();
   annotations = await loadAnnotations();
 
@@ -2068,6 +2081,7 @@ async function boot(): Promise<void> {
 
   onSettingsChanged((next) => {
     settings = next;
+    setDebugEnabled(settings.debugMode);
     applyAppearance();
     render();
   });
@@ -2182,6 +2196,10 @@ function installTopFrame(): void {
       sendResponse({ ok: true, count: annotations.length, active });
       return true;
     }
+    if (message.kind === "get-debug-log") {
+      sendResponse({ ok: true, debugLog: buildDebugLog(settings) });
+      return true;
+    }
     if (message.kind === "settings-changed") {
       void refreshSettings();
       sendResponse({ ok: true });
@@ -2233,8 +2251,29 @@ function installTopFrame(): void {
     { capture: true, passive: true },
   );
 
+  // Ahead of every other listener, so the entry says what the page was about to receive
+  // before this overlay's own handlers decide whether it ever does.
+  for (const type of ["pointerdown", "click"] as const) {
+    listen(
+      window,
+      type,
+      (event) => {
+        debugLog(type, {
+          target: summariseTarget(event.target),
+          ours: isOurUi(event.target as Element),
+          active,
+          mode,
+          composer: !!composer,
+          frozen,
+        });
+      },
+      { capture: true, passive: true },
+    );
+  }
+
   async function refreshSettings(): Promise<void> {
     settings = await loadSettings();
+    setDebugEnabled(settings.debugMode);
     applyAppearance();
     enforceMeasureSetting();
     enforceCssSetting();
@@ -2297,6 +2336,7 @@ function installTopFrame(): void {
 
       event.preventDefault();
       event.stopPropagation();
+      debugLog("click-swallowed", { target: summariseTarget(event.target), mode });
 
       if (mode === "edit") {
         const picked = document.elementFromPoint(event.clientX, event.clientY);

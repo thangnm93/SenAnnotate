@@ -83,6 +83,14 @@ capture banner in the panel disappears with it.
 **Two things are never recorded either way:** values typed into fields, and request or
 response bodies. See [[Diagnostics and Privacy]].
 
+### Debug log
+
+Off by default. Keeps the last 500 things the overlay did on this page — mode changes,
+freeze on and off, and which element each click landed on — so a problem you cannot
+describe can be sent as a file. Open the extension popup on that tab and press **Save
+.json** under *Debug log*. Element names only: no text, no attribute values, no field
+values. Turning it off discards the log.
+
 ---
 
 ## Behaviour
@@ -94,7 +102,8 @@ of a screenshot you are taking with something else — the notes are unaffected.
 
 ### Freeze animations on inspect
 
-Off by default. Makes <kbd>F</kbd> automatic whenever inspect mode goes on.
+Off by default. Makes <kbd>F</kbd> automatic whenever inspect mode goes on, and undoes it
+when inspect mode goes off. A freeze you started yourself is left alone.
 
 Worth turning on for a site with a lot of motion — a carousel, entrance animations, a
 sticky header that reflows. Worth leaving off elsewhere, because a frozen page is a page

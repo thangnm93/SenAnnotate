@@ -499,6 +499,8 @@ export interface Settings {
   gridMargin: number;
   /** Freeze animations automatically whenever inspect mode turns on. */
   freezeOnInspect: boolean;
+  /** Keep a bounded in-memory event log the popup can save, for bug reports. */
+  debugMode: boolean;
   /** Include the owner component's props in the report. */
   includeProps: boolean;
   /** Ceiling on how many ancestors to name. */
@@ -549,6 +551,7 @@ export const DEFAULT_SETTINGS: Settings = {
   gridGutter: 24,
   gridMargin: 72,
   freezeOnInspect: false,
+  debugMode: false,
   includeProps: true,
   maxComponents: 6,
   captureDiagnostics: true,
@@ -594,3 +597,24 @@ export const DETAIL_TO_COMPONENT_MODE: Record<OutputDetailLevel, ComponentDetect
   detailed: "smart",
   forensic: "all",
 };
+
+// -----------------------------------------------------------------------------
+// Debug log
+// -----------------------------------------------------------------------------
+
+export interface DebugEntry {
+  /** Milliseconds since the page started, from `performance.now()`. */
+  t: number;
+  kind: string;
+  detail?: Record<string, string | number | boolean | null>;
+}
+
+/** What "Save debug log" writes: the entries plus enough context to read them cold. */
+export interface DebugLog {
+  extensionVersion: string;
+  exportedAt: string;
+  page: string;
+  userAgent: string;
+  settings: Settings;
+  entries: DebugEntry[];
+}

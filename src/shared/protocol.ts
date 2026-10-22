@@ -12,7 +12,7 @@
 // `querySelector` and the attribute is removed straight afterwards.
 // =============================================================================
 
-import type { ComponentDetectionMode, Diagnostics, PageFrameworkInfo, ElementFrameworkInfo } from "./types";
+import type { ComponentDetectionMode, DebugLog, Diagnostics, PageFrameworkInfo, ElementFrameworkInfo } from "./types";
 
 export const NS = "senannotate";
 
@@ -154,6 +154,8 @@ export type RuntimeMessage =
   | { kind: "settings-changed" }
   /** popup → background, asking for the active tab's annotation count. */
   | { kind: "get-status" }
+  /** popup → content, for the debug log the page has been recording. */
+  | { kind: "get-debug-log" }
   /**
    * background → content, from the right-click menu.
    *
@@ -178,5 +180,5 @@ export type RuntimeMessage =
   | { kind: "annotate-context"; selection: boolean; selectionText?: string; inFrame: boolean };
 
 export type RuntimeResponse =
-  | { ok: true; dataUrl?: string; count?: number; active?: boolean }
+  | { ok: true; dataUrl?: string; count?: number; active?: boolean; debugLog?: DebugLog }
   | { ok: false; error: string };

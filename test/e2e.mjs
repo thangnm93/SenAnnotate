@@ -4992,6 +4992,106 @@ async function main() {
       await ctx.close();
     }
 
+    // -------------------------------------------------------------------------
+    // Leaving inspect, and the debug log
+    // -------------------------------------------------------------------------
+    //
+    // `freezeOnInspect` parks the page's timers when inspect turns on. It used to stay
+    // parked after inspect turned off, so the page looked hung until the Freeze button
+    // was found. A fixture of its own, per the shared-storage note in CLAUDE.md. The
+    // settings live in `storage.sync`, so both are put back at the end of the block.
+    {
+      const [freezeWorker] = context.serviceWorkers();
+      const patchSettings = (patch) =>
+        freezeWorker.evaluate(async (changes) => {
+          const key = "senannotate:settings";
+          const stored = (await chrome.storage.sync.get(key))[key] ?? {};
+          await chrome.storage.sync.set({ [key]: { ...stored, ...changes } });
+        }, patch);
+
+      await patchSettings({ freezeOnInspect: true, debugMode: true });
+      const leavePage = await context.newPage();
+      await leavePage.goto(`${base}/inspect-freeze.html`);
+      await leavePage.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
+      await leavePage.waitForTimeout(300);
+
+      const ticks = async () => Number(await leavePage.locator("#ticks").textContent());
+      const ticking = async () => {
+        const before = await ticks();
+        await leavePage.waitForTimeout(400);
+        return (await ticks()) > before;
+      };
+      const inspectTool = leavePage.locator(".tool--brand");
+
+      await inspectTool.click();
+      check("freeze-on-inspect parks the page's timers while inspecting", !(await ticking()));
+
+      await leavePage.locator("#bump").click();
+      await leavePage.waitForTimeout(100);
+      check(
+        "a page click is swallowed while inspecting",
+        (await leavePage.locator("#clicks").textContent()) === "0",
+      );
+
+      await inspectTool.click();
+      await leavePage.waitForTimeout(200);
+      check("leaving inspect releases the freeze it engaged", await ticking());
+
+      await leavePage.locator("#later-btn").click();
+      await leavePage.waitForTimeout(300);
+      check(
+        "timers scheduled after leaving inspect run",
+        (await leavePage.locator("#later").textContent()) === "1",
+      );
+
+      // A freeze the user asked for outlives inspect: only the automatic one is released.
+      await inspectTool.click();
+      // Inspect's own freeze is released and re-taken by hand, which makes it the user's.
+      await leavePage.locator('.tool[aria-label^="Freeze"]').click();
+      await leavePage.locator('.tool[aria-label^="Freeze"]').click();
+      await inspectTool.click();
+      await leavePage.waitForTimeout(200);
+      check("a manual freeze is kept when inspect ends", !(await ticking()));
+      await leavePage.locator('.tool[aria-label^="Freeze"]').click();
+      await leavePage.waitForTimeout(200);
+      check("and the Freeze button still releases it", await ticking());
+
+      const debugLogOf = (url) =>
+        freezeWorker.evaluate(async (target) => {
+          const tabs = await chrome.tabs.query({});
+          const tab = tabs.find((t) => t.url === target);
+          return tab?.id ? await chrome.tabs.sendMessage(tab.id, { kind: "get-debug-log" }) : null;
+        }, url);
+
+      const logged = await debugLogOf(leavePage.url());
+      const entries = logged?.debugLog?.entries ?? [];
+      const kinds = new Set(entries.map((entry) => entry.kind));
+      check(
+        "the debug log records state changes, freezes, clicks and swallowed clicks",
+        ["state", "freeze", "pointerdown", "click", "click-swallowed"].every((kind) => kinds.has(kind)),
+        `kinds: ${[...kinds].join(", ")}`,
+      );
+      const swallowed = entries.find((entry) => entry.kind === "click-swallowed");
+      check(
+        "a logged click names its target without any content",
+        swallowed?.detail?.target === "button#bump",
+        JSON.stringify(swallowed),
+      );
+      check(
+        "the debug log names the page without its query string",
+        logged?.debugLog?.page === `${base}/inspect-freeze.html`,
+        String(logged?.debugLog?.page),
+      );
+
+      await patchSettings({ debugMode: false });
+      await leavePage.waitForTimeout(300);
+      const cleared = await debugLogOf(leavePage.url());
+      check("turning debug off discards the log", (cleared?.debugLog?.entries ?? []).length === 0);
+
+      await patchSettings({ freezeOnInspect: false });
+      await leavePage.close();
+    }
+
     // Surviving an actual version upgrade is asserted by `test/upgrade.mjs`, which runs
     // straight after this file. It needs two browser launches sharing one profile, which
     // this suite's single throwaway context cannot provide — and `chrome.runtime.reload()`
