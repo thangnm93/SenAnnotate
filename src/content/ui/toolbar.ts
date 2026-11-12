@@ -76,6 +76,9 @@ const DOCK_EDGE = 8;
 const HINT_FLIP_TOP = 40;
 
 const MODES: { mode: InspectMode; iconName: string; title: string }[] = [
+  // "all" is the mega-mode and the default entry point — one button for click + drag +
+  // text selection rather than three separate mode buttons to choose between first.
+  { mode: "all", iconName: "cursor", title: "All modes — click, drag, or select text (0)" },
   { mode: "point", iconName: "cursor", title: "Click an element (1)" },
   { mode: "text", iconName: "text", title: "Select text (2)" },
   { mode: "area", iconName: "marquee", title: "Drag across elements (3)" },
@@ -87,8 +90,13 @@ const MODES: { mode: InspectMode; iconName: string; title: string }[] = [
  * One line of standing instruction. The mode buttons are icon-only and appear
  * only once inspect mode is on, so without this nothing on screen says a drag
  * mode exists — which is exactly how mode `area` went unused for three releases.
+ *
+ * `"all"` is the default mega-mode hint: it communicates all three input surfaces in
+ * one line so the user never has to wonder why clicking, dragging, or selecting each
+ * opens a composer without switching modes first.
  */
 const MODE_HINTS: Record<InspectMode, string> = {
+  all: "Click element · drag area · select text · C hover",
   point: "Click an element · ⌘/Ctrl+drag across several · C captures hover · 2 text · 3 area",
   text: "Select text · 1 point · 3 area",
   area: "Drag across elements · 1 point · 2 text",
@@ -156,7 +164,7 @@ export class Toolbar {
    */
   private hintVisible = false;
   private readonly resizeObserver: ResizeObserver;
-  private modeHint = MODE_HINTS.point;
+  private modeHint = MODE_HINTS.all;
 
   // Kept rather than only closed over: `paintPosition` fires `onDockShift` from outside
   // the constructor, and it is the one callback the drag itself does not own.
