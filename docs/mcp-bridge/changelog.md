@@ -77,6 +77,17 @@ reached 1,177 characters, *storage* 1,283 and the host permission 1,063. The for
 field over the limit — the repo has two earlier `fix:` commits for exactly this. Rewritten to
 965, 988 and 999 (counted with newlines, as the file's other counts are).
 
+**Valid JSON that is not an object stopped the server.** An automated review of the pushed
+commit found that `null` as a relay `/call` body reached `call.name` and threw inside an
+async handler nobody caught — an unhandled rejection, which ends a Node process, and with
+it the hub every relay uses. The extension socket (`null` as a message) and stdio (`null`
+as a line) had the same shape. Checked before fixing: against the committed server, a
+`POST /call` with body `null` reset the connection (status 0) and every later request
+failed. All three channels now require an object, and the HTTP handler has a `.catch` of
+its own; `test/mcp.mjs` sends `null`, `[1]` and `7` down each and asserts the server still
+answers. The same review raised port squatting — `context.md`, *What it does not defend
+against*.
+
 **Two more builds were broken on purpose** to make sure the end-to-end checks can fail:
 
 | Broken build | Checks that failed |
@@ -95,6 +106,8 @@ Run headless (`SENANNOTATE_HEADLESS=1`), Chromium 148 via Playwright 1.60:
 - `npm test` — measure: all checks passed; e2e: 410/410; upgrade: 9/9; MCP: 52/52.
 - After the fail-closed change, the whole suite again: measure all passed; e2e 410/410;
   upgrade 9/9; MCP 59/59.
+- After the malformed-JSON fix: `test/mcp.mjs` 63/63 (`src/content/` untouched since the
+  full run).
 
 Not verified here: the worker staying alive on an idle Chrome 116+ with no debugger
 attached (see `context.md` — Playwright's CDP attachment keeps every worker alive), and

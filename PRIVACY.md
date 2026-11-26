@@ -135,6 +135,12 @@ create, edit or delete notes.
   context to a cloud model sends your notes with it, exactly as it would a report you
   pasted. That is the same trade as *Copy report*, made without the paste.
 
+The extension does not check *which* program answers on that port. On a computer only you
+log into, that changes nothing — any program running as you can read your notes from
+Chrome's own files anyway. On a computer shared with other accounts, a program run by
+another account could listen on the port before your agent does; leave the switch off
+there.
+
 Turning the switch off closes the connection at once.
 
 ### Files you choose to save

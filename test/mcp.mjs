@@ -384,6 +384,32 @@ async function partServer() {
     );
     store.close();
 
+    // Valid JSON that is not an object. Each of these once reached a property read that
+    // threw outside any handler — the end of the process, and of every relay with it.
+    for (const body of ["null", "[1]", "7"]) {
+      const response = await http(port, {
+        method: "POST",
+        path: "/call",
+        headers: { "content-type": "application/json" },
+        body,
+      });
+      check(`a relay call whose body is ${body} is refused, not fatal`, response.status === 400, `${response.status}`);
+    }
+    agent.child.stdin.write("null\n7\n");
+    const store2 = scriptedBrowser(port, []);
+    await store2.welcomed;
+    store2.ws.send("null");
+    store2.ws.send("[]");
+    await sleep(300);
+    store2.close();
+    const alive = await http(port);
+    const stillAnswering = await agent.request("ping", {});
+    check(
+      "after malformed input on every channel the server still answers",
+      alive.status === 200 && stillAnswering.result !== undefined && agent.child.exitCode === null,
+      `health ${alive.status}, exit ${agent.child.exitCode}`,
+    );
+
     check("nothing but JSON-RPC was written to stdout", agent.garbage.length === 0, agent.garbage.join(" | "));
   } finally {
     await agent.close();

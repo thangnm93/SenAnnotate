@@ -54,7 +54,23 @@ the agent's context (a prompt-injection route), or mark them done. So, on every 
   setting. A setting can be changed by an import, a sync from another machine or a
   confused user; a constant cannot point the notes at the internet.
 
-Out of scope: a local process. It already runs as the reviewer.
+### What it does not defend against: whoever owns the port
+
+The extension authenticates nothing about the server. Whatever is listening on
+`127.0.0.1:<port>` when the switch is on gets the snapshot, and can send `set-status`.
+
+- **A process running as the reviewer** gains nothing by squatting: it can already read
+  `chrome.storage.local` straight out of the Chrome profile on disk.
+- **A process running as another OS user** is the real residual. Loopback is shared across
+  accounts, so on a machine several people log into, another account could bind the port
+  first and receive the notes — which it could not read from this user's profile.
+
+Closing it needs a secret the extension and the server share: the server prints a pairing
+key once, the reviewer pastes it into the settings card, and the server proves it holds it
+(an HMAC over a nonce in `welcome`) before the worker sends a byte of notes or obeys a
+command. Not built: it puts a copy-and-paste step in front of every user to defend a
+shared-machine case, and that trade is the product owner's call, not the implementer's.
+Raised by an automated review of the first commit; recorded in `PRIVACY.md` meanwhile.
 
 ## Lifetime of the worker
 

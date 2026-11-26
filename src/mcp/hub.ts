@@ -100,7 +100,16 @@ export class Hub implements ToolHost {
   constructor(private readonly options: HubOptions) {
     this.port = options.port;
     this.trusted = new Set([...OFFICIAL_EXTENSION_IDS, ...(options.extraExtensionIds ?? [])]);
-    this.server = createServer((request, response) => void this.onRequest(request, response));
+    // Caught here, not only inside: a rejection that escaped would be unhandled, and an
+    // unhandled rejection ends the process — the hub every relay depends on. A request
+    // that breaks something gets a 500 and the hub keeps serving.
+    this.server = createServer((request, response) => {
+      this.onRequest(request, response).catch((error: unknown) => {
+        this.options.log(`request failed: ${String(error)}`);
+        if (!response.headersSent) respond(response, 500, { error: "internal error" });
+        else response.destroy();
+      });
+    });
     this.server.on("upgrade", (request, socket, head) => this.onUpgrade(request, socket, head));
   }
 
@@ -196,12 +205,8 @@ export class Hub implements ToolHost {
       const body = await readBody(request, MAX_RELAY_BODY_BYTES);
       if (body === null) return respond(response, 413, { error: "too large" });
 
-      let call: { name?: unknown; args?: unknown };
-      try {
-        call = JSON.parse(body) as { name?: unknown; args?: unknown };
-      } catch {
-        return respond(response, 400, { error: "not JSON" });
-      }
+      const call = parseObject(body) as { name?: unknown; args?: unknown } | null;
+      if (!call) return respond(response, 400, { error: "expected a JSON object" });
       if (typeof call.name !== "string") return respond(response, 400, { error: "name required" });
 
       // A throw here would be an unhandled rejection — which ends the process, and with it
@@ -271,12 +276,10 @@ export class Hub implements ToolHost {
   }
 
   private onBrowserMessage(browser: Browser, text: string): void {
-    let message: ExtensionMessage;
-    try {
-      message = JSON.parse(text) as ExtensionMessage;
-    } catch {
-      return;
-    }
+    // `null`, a number or an array all parse — and reading `.type` off `null` throws inside
+    // a socket's data handler, which is an uncaught exception and the end of the hub.
+    const message = parseObject(text) as ExtensionMessage | null;
+    if (!message) return;
 
     if (message.type === "hello") {
       if (message.wire !== MCP_WIRE_VERSION) {
@@ -337,6 +340,18 @@ function extensionIdOf(origin: string | undefined): string | null {
   if (typeof origin !== "string" || !origin.startsWith(prefix)) return null;
   const id = origin.slice(prefix.length);
   return EXTENSION_ID_PATTERN.test(id) ? id : null;
+}
+
+/** Parse JSON that must be an object. Anything else — invalid, `null`, an array — is null. */
+function parseObject(text: string): Record<string, unknown> | null {
+  try {
+    const value: unknown = JSON.parse(text);
+    return typeof value === "object" && value !== null && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Every request a web page makes carries at least one of these; Node's `fetch` neither. */

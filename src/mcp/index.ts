@@ -176,9 +176,9 @@ async function main(): Promise<void> {
   const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
   lines.on("line", (line) => {
     if (!line.trim()) return;
-    let request: Request;
+    let request: unknown;
     try {
-      request = JSON.parse(line) as Request;
+      request = JSON.parse(line);
     } catch {
       fail(null, -32700, "Parse error");
       return;
@@ -187,7 +187,15 @@ async function main(): Promise<void> {
       fail(null, -32600, "Batches are not supported");
       return;
     }
-    const pending = handle(request).finally(() => inflight.delete(pending));
+    // `null` and bare numbers are valid JSON and not requests; reading `.id` off `null`
+    // would reject `handle` and, unhandled, end the process.
+    if (typeof request !== "object" || request === null) {
+      fail(null, -32600, "Invalid Request");
+      return;
+    }
+    const pending = handle(request as Request)
+      .catch((error: unknown) => log(`request failed: ${String(error)}`))
+      .finally(() => inflight.delete(pending));
     inflight.add(pending);
   });
 
