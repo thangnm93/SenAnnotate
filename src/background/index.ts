@@ -2,12 +2,14 @@
 // Service worker
 // =============================================================================
 //
-// Deliberately thin. It exists for the two things a content script cannot do:
-// photograph the tab, and paint the toolbar badge. Everything else — cropping,
-// saving, all the state — lives in the content script.
+// Deliberately thin. It exists for the things a content script cannot do: photograph
+// the tab, paint the toolbar badge, and — when the reviewer turns it on — hold the
+// connection to the agent's MCP server, which has to outlive any one tab (`mcp.ts`).
+// Everything else — cropping, saving, all the state — lives in the content script.
 // =============================================================================
 
 import { DEFAULT_ACCENT, accentTheme } from "../shared/accent";
+import { installMcpBridge, mcpStatus, wakeMcpBridge } from "./mcp";
 import { SETTINGS_KEY, type RuntimeMessage, type RuntimeResponse } from "../shared/protocol";
 import type { Settings } from "../shared/types";
 
@@ -47,7 +49,15 @@ chrome.runtime.onMessage.addListener(
           void chrome.action.setBadgeText({ tabId, text: message.count ? String(message.count) : "" });
           void badgeColor().then((color) => chrome.action.setBadgeBackgroundColor({ tabId, color }));
         }
+        // Every page with the toolbar sends this as it renders, which makes it the wake-up
+        // call for a bridge whose worker was asleep. A no-op while the switch is off.
+        wakeMcpBridge();
         sendResponse({ ok: true });
+        return false;
+      }
+
+      case "mcp-status": {
+        sendResponse({ ok: true, mcp: mcpStatus() });
         return false;
       }
 
@@ -56,6 +66,8 @@ chrome.runtime.onMessage.addListener(
     }
   },
 );
+
+installMcpBridge();
 
 // -----------------------------------------------------------------------------
 // Right-click menu

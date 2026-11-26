@@ -9,23 +9,25 @@
   },
   "scripts": {
     "icons": "node scripts/make-icons.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.mcp.json",
     "test:unit": "node test/measure.mjs",
     "build": "node scripts/make-icons.mjs && node build.mjs",
     "dev": "node scripts/make-icons.mjs && node build.mjs --watch",
-    "test": "npm run build && node test/measure.mjs && node test/e2e.mjs && node test/upgrade.mjs",
+    "test": "npm run build && node test/measure.mjs && node test/e2e.mjs && node test/upgrade.mjs && node test/mcp.mjs",
     "test:upgrade": "npm run build && node test/upgrade.mjs",
     "verify:sites": "npm run build && node test/verify-real-sites.mjs",
     "verify:tracer": "npm run build && node test/verify-tracer.mjs",
     "pack": "npm run build && node scripts/pack.mjs",
     "changelog": "node scripts/changelog.mjs",
     "assets": "npm run build && node scripts/store-assets.mjs",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist dist-mcp",
     "wiki:assets": "npm run build && node scripts/wiki-assets.mjs",
-    "wiki:sync": "node scripts/wiki-sync.mjs"
+    "wiki:sync": "node scripts/wiki-sync.mjs",
+    "test:mcp": "npm run build && node test/mcp.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",
+    "@types/node": "^22.20.7",
     "esbuild": "^0.24.0",
     "typescript": "^5.6.0"
   },

@@ -17,6 +17,7 @@
 
 **What comes out**
 - [[The Report]]
+- [[Agent Connection MCP]]
 - [[Diagnostics and Privacy]]
 
 **Environments**

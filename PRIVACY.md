@@ -1,6 +1,6 @@
 # Privacy policy — SenAnnotate
 
-Last updated: 18 August 2026. Applies to the SenAnnotate Chrome extension.
+Last updated: 26 November 2026. Applies to the SenAnnotate Chrome extension.
 
 ## The short version
 
@@ -8,6 +8,12 @@ Last updated: 18 August 2026. Applies to the SenAnnotate Chrome extension.
 records or produces is transmitted anywhere. Everything stays in your browser, on your
 machine, until you copy a report, save a screenshot, or save a file yourself — and a file
 you saved is a file on your disk, which the extension has no way to send anywhere.
+
+The one exception is a switch you have to turn on yourself, **Connect to your agent
+(MCP)**, which is off by default. On, the extension hands your notes to a program on *your
+own computer* — the SenAnnotate MCP server your coding agent runs — over `127.0.0.1`. That
+address cannot leave the machine, and the extension will not connect to any other. See
+*The agent connection* below.
 
 There is no account, no analytics, no telemetry, no crash reporting, and no advertising or
 tracking code of any kind. The extension bundles all of its code; it loads nothing from a
@@ -107,6 +113,30 @@ is displayed in it — including a reference image you have pasted but not yet s
 picture is confidential and the page you are annotating is not one you trust, that is worth
 knowing before you paste.
 
+### The agent connection (MCP) — only if you turn it on
+
+Off by default. With it off, the extension opens no connection of any kind.
+
+Turned on in the settings card, the extension's background worker connects to
+`ws://127.0.0.1:<port>` — the SenAnnotate MCP server, a program your coding agent (Claude
+Code, Cursor, …) starts on your computer — and sends it what *Saved on your device* above
+describes: every page's notes, including embedded screenshots and reference images. The
+server keeps them in memory only, writes nothing to disk, and hands them to the agent that
+started it when the agent asks. The agent can mark a note done or open again; it cannot
+create, edit or delete notes.
+
+- **Only `127.0.0.1`.** The host is fixed in the extension; the port is the only thing you
+  can change. Loopback traffic does not leave your machine.
+- **Only this extension.** The server refuses anything that comes from a web page, checks
+  the `Host` header against DNS rebinding, and accepts only the Web Store build of
+  SenAnnotate (or a copy whose id you have explicitly given it) — so neither a site you
+  visit nor another extension can read your notes from it, feed it notes, or mark them done.
+- **What the agent does with them is the agent's business.** An agent that sends its
+  context to a cloud model sends your notes with it, exactly as it would a report you
+  pasted. That is the same trade as *Copy report*, made without the paste.
+
+Turning the switch off closes the connection at once.
+
 ### Files you choose to save
 
 Three things leave the extension, all of them only when you press the button that produces
@@ -129,7 +159,9 @@ anywhere.
 
 ## What the extension does not do
 
-- It does not sell or transfer your data to anyone — there is nowhere for it to go.
+- It does not sell or transfer your data to anyone — there is nowhere for it to go. The
+  agent connection above sends it to a program on your own machine, and only when you have
+  switched it on.
 - It does not use your data for anything unrelated to producing the report you asked for.
 - It does not use your data to assess creditworthiness or for lending purposes.
 - It does not read your clipboard on its own, and holds no permission that would let it.

@@ -13,10 +13,11 @@ production-build measurements). This file covers what you need to *change* the c
 
 ```bash
 npm run dev          # esbuild watch → dist/ (reload the unpacked extension after each rebuild)
-npm run typecheck    # tsc --noEmit — the only static gate
-npm run build        # icons + three bundles + static passthrough
-npm test             # build, then test/e2e.mjs and test/upgrade.mjs, headed Chromium
+npm run typecheck    # tsc --noEmit, twice: the extension, then src/mcp (tsconfig.mcp.json)
+npm run build        # icons + the extension bundles + static passthrough + dist-mcp/
+npm test             # build, then e2e.mjs, upgrade.mjs and mcp.mjs, headed Chromium
 npm run test:upgrade # just the upgrade check, to iterate on it alone
+npm run test:mcp     # just the MCP bridge — server, relay, real extension
 npm run pack         # → senannotate-<version>.zip (dist/ + TESTER-GUIDE.md)
 ```
 
@@ -67,11 +68,17 @@ That single fact forces the three-context split:
 | ↳ same bundle, child frames | ISOLATED, `document_idle` | `src/content/frames.ts` | highlight + capture only; hands drafts up to the top frame |
 | `background.js` (ESM) | service worker | `src/background/` | `captureVisibleTab`, toolbar badge, keyboard command |
 | `popup.js` (IIFE) | popup page | `src/popup/` | settings |
+| `dist-mcp/senannotate-mcp.mjs` | **Node**, started by an agent | `src/mcp/` | MCP over stdio; the hub the extension's worker dials on `127.0.0.1` |
+
+The last row is not part of the extension: `dist/` is the Web Store zip and the server
+must never land in it. It shares only `shared/` with the rest, and is type-checked by
+`tsconfig.mcp.json` (Node globals) because the root config excludes it.
 
 `src/shared/` is the only code all four import: `types.ts`, `protocol.ts` (wire protocol +
 storage keys), `output.ts` (the Markdown report), `archive.ts` (export/import), `share.ts`
 (the self-contained `.html` review), `download.ts` (save a blob the plain DOM way), `accent.ts`
-(the accent colour and the two shades derived from it). Nothing in `popup/` or `background/`
+(the accent colour and the two shades derived from it), `mcp.ts` (the wire between the
+worker and the MCP server — imported by both, so neither can drift). Nothing in `popup/` or `background/`
 may import from `content/` — that inversion is what put `archive.ts` in `shared/` rather than
 next to `content/storage.ts`, and `download.ts` is the same rule with a second worked example:
 the popup saves files too, so the saver cannot live in `content/`. It is also why `accent.ts`
@@ -170,6 +177,15 @@ round-trip, and works identically with no framework at all. Keep it that way.
   an allowlist, never an `svg+xml` — SVG runs script). The exported file also carries its own
   CSP. A second sink, or one `+` concatenation past the template, is an XSS hole in a file
   people forward to colleagues.
+- **The MCP bridge is off by default and dials `127.0.0.1` only.** With `mcpBridge` false
+  the worker opens no connection of any kind — `PRIVACY.md` says the extension makes no
+  network request of its own, and `test/mcp.mjs` asserts the off state rather than
+  assuming it. The host is a constant in `shared/mcp.ts`, deliberately not a setting.
+  The server's guard rails (`Host`, `Origin`, `Sec-Fetch-Site`, and a fail-closed allowlist
+  of extension ids — the Web Store id plus `SENANNOTATE_EXTENSION_ID`) are what stop a web
+  page or another extension reaching the notes through loopback;
+  `docs/mcp-bridge/context.md` has the model. The unpacked build the suite loads has its own
+  id, which is why `test/mcp.mjs` starts its servers after the browser.
 - **Privacy guarantees have tests and must not regress:** field *values* are never recorded
   (the trail says `Edited Password`), request/response bodies are never recorded, and
   credential-looking query params are `[redacted]` before storage.

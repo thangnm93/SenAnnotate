@@ -70,6 +70,26 @@ Slack or Jira.
 
 ---
 
+## AI agent
+
+### Connect to your agent (MCP)
+
+*Off by default.* Lets a coding agent read your notes, see their screenshots and mark them
+done itself, instead of you copying the report across. The agent runs a small server on
+your computer and the extension connects to it on `127.0.0.1` — never to anywhere else.
+Setting up the agent's side is one command; see [[Agent Connection MCP]].
+
+With the switch off the extension makes no connection at all. Switched on, two rows
+appear under it:
+
+- **Port** — `7362` unless you changed the server's `SENANNOTATE_MCP_PORT`. Change both
+  or neither.
+- **Status** — *Connected*, or *Nothing on port 7362* while no agent is running the
+  server, or *Refused* with this copy's id when it was installed unpacked and the server
+  has not been told to trust it. It updates while the card is open.
+
+---
+
 ## Bug reports
 
 ### Capture errors & steps

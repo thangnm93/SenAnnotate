@@ -8,6 +8,14 @@
 //   popup.js       IIFE, extension popup page
 //
 // MV3 content scripts are not ES modules, hence IIFE for the two of them.
+//
+// Plus one bundle that is not part of the extension at all:
+//
+//   dist-mcp/senannotate-mcp.mjs   ESM, Node — the MCP server an agent starts
+//
+// It goes to its own directory because `dist/` is exactly what gets zipped for the Web
+// Store, and a Node program inside an extension package is at best dead weight and at
+// worst a reviewer's question about code the extension never runs.
 // =============================================================================
 
 import { context, build } from "esbuild";
@@ -17,6 +25,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const DIST = resolve(ROOT, "dist");
+const DIST_MCP = resolve(ROOT, "dist-mcp");
 const WATCH = process.argv.includes("--watch");
 const DEV = WATCH || process.argv.includes("--dev");
 
@@ -65,12 +74,34 @@ rmSync(DIST, { recursive: true, force: true });
 mkdirSync(DIST, { recursive: true });
 copyStatic();
 
-const configs = targets.map((t) => ({
-  ...shared,
-  entryPoints: [resolve(ROOT, t.in)],
-  outfile: resolve(DIST, t.out),
-  format: t.format,
-}));
+const { version } = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8"));
+
+rmSync(DIST_MCP, { recursive: true, force: true });
+mkdirSync(DIST_MCP, { recursive: true });
+
+const configs = [
+  ...targets.map((t) => ({
+    ...shared,
+    entryPoints: [resolve(ROOT, t.in)],
+    outfile: resolve(DIST, t.out),
+    format: t.format,
+  })),
+  {
+    ...shared,
+    entryPoints: [resolve(ROOT, "src/mcp/index.ts")],
+    outfile: resolve(DIST_MCP, "senannotate-mcp.mjs"),
+    format: "esm",
+    platform: "node",
+    // Node 22 is the oldest line still supported upstream, and the first with a global
+    // `fetch`, `AbortSignal.timeout` and `WebSocket` all stable.
+    target: ["node22"],
+    // Not minified even in a release build: this file is run by hand, read by people
+    // deciding whether to trust it, and its stack traces end up in bug reports.
+    minify: false,
+    banner: { js: "#!/usr/bin/env node" },
+    define: { ...shared.define, __SENANNOTATE_VERSION__: JSON.stringify(version) },
+  },
+];
 
 if (WATCH) {
   const contexts = await Promise.all(configs.map((c) => context(c)));

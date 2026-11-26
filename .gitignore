@@ -1,5 +1,7 @@
 node_modules/
 dist/
+dist-mcp/
+senannotate-mcp-*.mjs
 .pack/
 senannotate-*.zip
 # `scripts/pack.mjs` stages the unpacked extension in a directory of the same name

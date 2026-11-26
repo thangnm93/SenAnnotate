@@ -17,6 +17,7 @@
 // =============================================================================
 
 import { ACCENT_PRESETS, DEFAULT_ACCENT } from "../../shared/accent";
+import { MCP_PORT_RANGE, type McpBridgeStatus } from "../../shared/mcp";
 import {
   COMPONENT_OPTIONS,
   OUTPUT_DETAIL_OPTIONS,
@@ -67,6 +68,9 @@ export class SettingsCard {
    * visible but inert is worse than either showing or hiding it.
    */
   private readonly measureRows: HTMLElement[];
+  /** The port and the status line — only while the MCP bridge is switched on. */
+  private readonly mcpRows: HTMLElement[];
+  private readonly mcpStatusText: HTMLElement;
   private readonly swatches = new Map<string, HTMLButtonElement>();
   private readonly accentCustom: HTMLInputElement;
 
@@ -124,7 +128,27 @@ export class SettingsCard {
         "Shades padding and margin on whatever the pointer is over, and puts the border-box size on a badge. Mode 4 shows them regardless of this.",
       ),
     ];
+    this.mcpStatusText = h("span", {
+      class: "mcp-status setting-row__control",
+      attrs: { "data-state": "off", role: "status" },
+      text: "—",
+    });
+    this.mcpRows = [
+      this.number(
+        "mcpPort",
+        "Port",
+        "Where the SenAnnotate MCP server listens on this computer. Change it here and in the server's SENANNOTATE_MCP_PORT together, or not at all.",
+        MCP_PORT_RANGE,
+      ),
+      this.row(
+        "Status",
+        "Whether the extension has found the server. Your agent starts the server; if nothing is listening, add it to your agent first (the README has the one-line command), then reload this tab. \"Refused\" means this is an unpacked copy, whose id the server does not trust until you name it in the server's environment — the Web Store build needs nothing.",
+        this.mcpStatusText,
+      ),
+    ];
+
     for (const row of this.measureRows) row.classList.add("setting-row--child");
+    for (const row of this.mcpRows) row.classList.add("setting-row--child");
     // A second indent level, because these three are children of a child.
     for (const row of this.gridRows) row.classList.add("setting-row--grandchild");
 
@@ -170,6 +194,16 @@ export class SettingsCard {
           "A link to the file in your Downloads keeps the report small. Embedding survives being pasted somewhere the file cannot follow, at a few hundred kilobytes of base64.",
           SCREENSHOT_OPTIONS,
         ),
+
+        // Its own group rather than a row under Report: it is the one setting that opens a
+        // connection, and it should be found by someone looking for exactly that.
+        this.group("AI agent"),
+        this.toggle(
+          "mcpBridge",
+          "Connect to your agent (MCP)",
+          "Lets a coding agent — Claude Code, Cursor, anything that speaks MCP — read these notes, see their screenshots and mark them done, through the SenAnnotate MCP server it runs on this computer. The extension only ever connects to 127.0.0.1: nothing leaves your machine. Off by default; with it off, the extension makes no connection at all.",
+        ),
+        ...this.mcpRows,
 
         this.group("Bug reports"),
         this.toggle(
@@ -394,6 +428,9 @@ export class SettingsCard {
     for (const row of this.measureRows) {
       row.style.display = settings.measureTools ? "" : "none";
     }
+    for (const row of this.mcpRows) {
+      row.style.display = settings.mcpBridge ? "" : "none";
+    }
     // The three grid numbers need both: a grid nobody is drawing has no columns to set,
     // and neither does a measuring surface that is switched off entirely.
     for (const row of this.gridRows) {
@@ -404,6 +441,25 @@ export class SettingsCard {
     for (const [value, button] of this.swatches) {
       button.setAttribute("aria-pressed", String(value === settings.accentColor));
     }
+  }
+
+  /**
+   * The bridge's state, as the worker reports it. `null` when the worker did not answer —
+   * an extension mid-reload — which is shown as unknown rather than guessed at.
+   */
+  setMcpStatus(status: McpBridgeStatus | null): void {
+    const state = status?.state ?? "unknown";
+    const port = status?.port;
+    const text: Record<string, string> = {
+      connected: `Connected${status?.server ? ` — server ${status.server}` : ""}`,
+      connecting: `Looking on port ${port}…`,
+      unreachable: `Nothing on port ${port} — start it from your agent`,
+      // The one state whose fix is a value to copy, so the value is in the line.
+      refused: `Refused — start the server with SENANNOTATE_EXTENSION_ID=${status?.extensionId ?? "<this extension's id>"}`,
+      off: "Off",
+    };
+    this.mcpStatusText.dataset.state = state;
+    this.mcpStatusText.textContent = text[state] ?? "Unknown";
   }
 
   /**

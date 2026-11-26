@@ -61,7 +61,9 @@ jobs:
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" senannotate-*.zip --notes-file release-notes.md
+        # The MCP server rides along as a second asset. Not in the zip — that goes to the
+        # Web Store, and the server is a Node program the extension never runs.
+        run: gh release create "$GITHUB_REF_NAME" senannotate-*.zip senannotate-mcp-*.mjs --notes-file release-notes.md
 
       # Ships the same zip to the Web Store. Runs after the GitHub release on purpose: the
       # release is ours and always succeeds, while this depends on Google, and a Store

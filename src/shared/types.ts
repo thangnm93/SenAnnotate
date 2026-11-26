@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { DEFAULT_ACCENT } from "./accent";
+import { MCP_DEFAULT_PORT } from "./mcp";
 
 export type OutputDetailLevel = "compact" | "standard" | "detailed" | "forensic";
 
@@ -532,6 +533,17 @@ export interface Settings {
    * hover and text-on-accent shades from it.
    */
   accentColor: string;
+  /**
+   * Hand the stored notes to the SenAnnotate MCP server on this machine, so a coding
+   * agent can read them and mark them done — see `docs/mcp-bridge/`.
+   *
+   * Off by default, and the default is a promise: with it off the extension opens no
+   * connection of any kind, which is what `PRIVACY.md` says. On, the service worker dials
+   * `127.0.0.1` and nothing else (`shared/mcp.ts` explains why the host is not a setting).
+   */
+  mcpBridge: boolean;
+  /** The port `senannotate-mcp` listens on. Only the port; the host is fixed. */
+  mcpPort: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -556,6 +568,10 @@ export const DEFAULT_SETTINGS: Settings = {
   toolbarCollapsed: false,
   screenshotDelivery: "path",
   accentColor: DEFAULT_ACCENT,
+  mcpBridge: false,
+  // `shared/mcp.ts` imports only *types* from this file, so the edge back is not a cycle
+  // at runtime.
+  mcpPort: MCP_DEFAULT_PORT,
 };
 
 export const OUTPUT_DETAIL_OPTIONS: { value: OutputDetailLevel; label: string; hint: string }[] = [
