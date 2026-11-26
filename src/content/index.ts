@@ -8,12 +8,13 @@
 
 import { downloadBlob } from "../shared/download";
 import { formatCssChanges, formatSource, generateOutput } from "../shared/output";
-import { ANNOTATION_PREFIX, HIDDEN_KEY } from "../shared/protocol";
+import { HIDDEN_KEY } from "../shared/protocol";
 import type { RuntimeMessage, RuntimeResponse } from "../shared/protocol";
 import {
   DEFAULT_SETTINGS,
   DETAIL_TO_COMPONENT_MODE,
   isDone,
+  pathOf,
   type Annotation,
   type AnnotationKind,
   type AnnotationStatus,
@@ -42,6 +43,7 @@ import {
 } from "./bridge";
 import { captureDraft, resolveElement, viewportBoxes, type Draft } from "./capture";
 import { copyText } from "./clipboard";
+import { buildDebugLog, debugLog, debugState, setDebugEnabled, summariseTarget } from "./debug-log";
 import { pickColour } from "./eyedropper";
 import {
   broadcastFrameState,
@@ -57,12 +59,12 @@ import { canvasToBlob, cropToCanvas, downloadPath, encodeForEmbed, encodeSupplie
 import { resolveSource } from "./source";
 import {
   loadAnnotations,
+  loadComposerPosition,
   loadDockPosition,
-  pageKey,
   loadSettings,
   onSettingsChanged,
   saveAnnotations,
-  saveAnnotationsForUrl,
+  saveComposerPosition,
   saveDockPosition,
   saveSettings,
 } from "./storage";
@@ -129,8 +131,12 @@ let diagnosticsCache: Diagnostics | null = null;
  */
 let hidden = false;
 let active = false;
-let mode: InspectMode = "point";
+// "all" is the mega-mode default: a short click → element, a drag → area, a text
+// selection → text. The user never has to choose before they start annotating.
+let mode: InspectMode = "all";
 let frozen = false;
+/** Freeze that inspect mode engaged itself, and so releases when inspect ends. */
+let frozenByInspect = false;
 let panelOpen = false;
 
 let hoveredElement: Element | null = null;
@@ -188,6 +194,13 @@ let picked: Element[] = [];
  * window drag, which is no place for a storage read.
  */
 let dockPosition: { x: number; y: number } | null = null;
+
+/**
+ * Where the composer card was last dropped on *this* page, or `null` for the
+ * element-anchored default. Kept in memory alongside `dockPosition` so that
+ * `applyPosition` on resize can re-clamp without hitting storage.
+ */
+let composerPosition: { x: number; y: number } | null = null;
 
 /** Elements the composer is currently about — kept live for screenshotting. */
 let composerTargets: Element[] = [];
@@ -364,6 +377,10 @@ const panelCallbacks = {
   onDownload: () => downloadReport(),
   onClearAll: () => clearAll(),
   onSelect: (annotation: Annotation) => {
+    if (!onThisPage(annotation)) {
+      ui.toast(`This note is on ${annotation.pathname} — open that page to edit it`);
+      return;
+    }
     scrollToAnnotation(annotation);
     openEditor(annotation);
   },
@@ -373,7 +390,7 @@ const panelCallbacks = {
     render();
   },
   onHoverChange: (annotation: Annotation | null) => {
-    if (!annotation) {
+    if (!annotation || !onThisPage(annotation)) {
       overlay.hideHighlights();
       return;
     }
@@ -423,7 +440,9 @@ function enforceCssSetting(): void {
 
 function enforceMeasureSetting(): void {
   if (measureModeAvailable() || mode !== "measure") return;
-  mode = "point";
+  // Return to all-mode rather than point: "all" is the entry point, so disabling
+  // measurement tools lands back at the same default the user sees on first activation.
+  mode = "all";
   measureOverlay.hideAll();
   broadcastFrameState(active, mode);
 }
@@ -508,7 +527,13 @@ function toggleCssCard(force?: boolean): void {
   render();
 }
 
+/** The list spans the origin; an element can only be resolved, boxed or pinned on its own page. */
+function onThisPage(annotation: Annotation): boolean {
+  return pathOf(annotation, location.pathname) === location.pathname;
+}
+
 function render(): void {
+  debugState({ active, mode, frozen, composer: !!composer, panelOpen });
   toolbar.update({
     active,
     mode,
@@ -535,7 +560,8 @@ function render(): void {
     grid.hide();
   }
 
-  markers.render(annotations, settings.showMarkers && !!annotations.length);
+  const here = annotations.filter(onThisPage);
+  markers.render(here, settings.showMarkers && !!here.length);
   panel?.render(annotations, settings.detailLevel);
   settingsCard?.render(settings);
   renderCssCard();
@@ -581,9 +607,15 @@ function setActive(next: boolean): void {
     rightClicked = null;
     rightClickedSelection = null;
     document.body.style.removeProperty("cursor");
+    // Parked timers on a page nobody is inspecting read as a hung tab.
+    if (frozenByInspect && frozen) void toggleFreeze(false);
+    frozenByInspect = false;
   } else {
     document.body.style.setProperty("cursor", "crosshair", "important");
-    if (settings.freezeOnInspect && !frozen) void toggleFreeze(true);
+    if (settings.freezeOnInspect && !frozen) {
+      frozenByInspect = true;
+      void toggleFreeze(true);
+    }
   }
 
   // Frames have no toolbar of their own, so this is the only way they learn that
@@ -595,7 +627,9 @@ function setActive(next: boolean): void {
 async function toggleFreeze(force?: boolean): Promise<void> {
   const next = force ?? !frozen;
   if (next === frozen) return;
+  if (force === undefined) frozenByInspect = false;
   frozen = next;
+  debugLog("freeze", { on: frozen, auto: force !== undefined });
   await setFrozen(frozen);
   ui.toast(frozen ? "Animations frozen" : "Animations resumed");
   render();
@@ -765,7 +799,11 @@ function watchMcpStatus(on: boolean): void {
 }
 
 /**
- * An agent changed notes on this page over the MCP bridge.
+ * An agent changed notes on this site over the MCP bridge.
+ *
+ * `page` is any page of the origin, not necessarily this one: the list in memory is the
+ * whole site's (`docs/multi-page-list/`), so a note marked done on `/checkout` is ours
+ * to update while the reviewer is on `/cart`.
  *
  * Storage already holds the change — the worker wrote it. This brings the copy in memory
  * into line so the panel, the pins and the count show it, and so the reviewer's next edit
@@ -773,7 +811,7 @@ function watchMcpStatus(on: boolean): void {
  * already right, and persisting would re-run the quota trim and repeat its toast.
  */
 function applyAgentUpdate(page: string, ids: string[], status: AnnotationStatus): void {
-  if (pageKey() !== `${ANNOTATION_PREFIX}${page}`) return;
+  if (!page.startsWith(`${location.origin}/`)) return;
 
   const wanted = new Set(ids);
   let changed = 0;
@@ -1005,7 +1043,8 @@ function currentMeasurements(target: Element): Measurements {
  * conclusion `docs/modal-focus-leak/` reached for dialogs.
  */
 function captureHovered(): void {
-  if (mode !== "point" && mode !== "measure") return;
+  // Allow in point, measure, and the mega all-mode — all three route C the same way.
+  if (mode !== "point" && mode !== "measure" && mode !== "all") return;
 
   if (hoveredElement && !hoveredElement.isConnected) hoveredElement = null;
 
@@ -1176,6 +1215,7 @@ function openComposer(draft: Draft, anchor: DOMRect, existing: Annotation | null
           {
             ...(composerDraft ?? draft),
             id: newId(),
+            pathname: location.pathname,
             comment,
             kind,
             referenceImages: images,
@@ -1203,6 +1243,12 @@ function openComposer(draft: Draft, anchor: DOMRect, existing: Annotation | null
     onRetarget: retargetable(draft, existing)
       ? (direction) => void retargetComposer(direction)
       : undefined,
+    onMove: (position) => {
+      // Saved on drop, not per frame — a drag at pointer frequency would write sixty
+      // times a second for as long as the button is held.
+      composerPosition = position;
+      void saveComposerPosition(position);
+    },
   };
 
   composer = new Composer(
@@ -1220,6 +1266,10 @@ function openComposer(draft: Draft, anchor: DOMRect, existing: Annotation | null
     },
     callbacks,
   );
+  // Apply the saved position after construction, exactly as `toolbar.applyPosition`
+  // runs after `createTopUi`. If `composerPosition` is null the card stays where
+  // `position()` anchored it near the target element — the pre-drag default.
+  composer.applyPosition(composerPosition);
 }
 
 /**
@@ -2012,6 +2062,8 @@ function queueSync(): void {
       // A window narrowed since the position was saved can leave the pill off-screen,
       // so the stored coordinates are re-clamped rather than trusted.
       toolbar.applyPosition(dockPosition);
+      // Re-clamp the composer too, if it is open and has been dragged somewhere.
+      composer?.applyPosition(composerPosition);
     }
     // A dialog that resizes, or animates into place after it opened, changes whether it is a
     // containing block for our fixed host — and a resize changes the viewport we fit to.
@@ -2033,7 +2085,8 @@ function queueSync(): void {
       if (hoveredElement?.isConnected) drawHover(hoveredElement);
       return;
     }
-    if (mode !== "point") return;
+    // Hover redraw applies in point and all modes; text and area have no hover path.
+    if (mode !== "point" && mode !== "all") return;
     if (picked.length) drawPicked();
     else if (hoveredElement) {
       overlay.showHighlights([hoveredElement.getBoundingClientRect()], hoverLabel ?? undefined);
@@ -2084,6 +2137,7 @@ async function ensureDetection(): Promise<void> {
 
 async function boot(): Promise<void> {
   settings = await loadSettings();
+  setDebugEnabled(settings.debugMode);
   applyAppearance();
   annotations = await loadAnnotations();
 
@@ -2094,9 +2148,14 @@ async function boot(): Promise<void> {
   // pill for a user whose toolbar starts collapsed — moving a handle dropped at the
   // right edge some 300px inward on every reload.
   dockPosition = await loadDockPosition();
+  // Load alongside the toolbar position: both are per-page layout facts. The composer
+  // is not open yet, so nothing to `applyPosition` here — the saved point is passed
+  // to every subsequent `openComposer` call via the module-level `composerPosition`.
+  composerPosition = await loadComposerPosition();
 
   onSettingsChanged((next) => {
     settings = next;
+    setDebugEnabled(settings.debugMode);
     applyAppearance();
     render();
   });
@@ -2159,27 +2218,18 @@ function installTopFrame(): void {
     openComposer({ ...draft, screenshotData: undefined }, frameAnchor(draft), null);
   });
 
-  // SPA navigation: persist page A's annotations, then load page B's.
+  // SPA navigation: the list is the origin's, so it stays; what changes is which of
+  // its notes belong to the page now showing, and `render()` re-derives that.
   //
   // The action-trail poller fires this before appending the "navigate" step, so
   // `clearActions()` here wipes only page A's trail; the navigate entry that
   // follows opens a fresh trail that belongs to page B.
   //
-  // `saveAnnotationsForUrl` targets the *old* href explicitly because
-  // `location.href` has already advanced to page B by the time this fires, and
-  // `saveAnnotations()` would write to the wrong key.
-  //
   // The diagnostics cache is intentionally left alone: it is a running buffer of
   // network activity that spans the whole tab session (not scoped per page), and
   // clearing it here would drop entries that happened between the last push and
   // the navigation — a bigger privacy surprise than retaining them.
-  onUrlChange(async (fromHref) => {
-    // Save page A's annotations under page A's key before the URL key changes.
-    await saveAnnotationsForUrl(annotations, fromHref);
-
-    // Load page B's annotations (pageKey() now resolves to the new pathname).
-    annotations = await loadAnnotations();
-
+  onUrlChange(() => {
     // Clear the action trail so page B's report does not contain page A's steps.
     // The "navigate" entry that `actions.ts` records next will be the first entry
     // in the new trail, giving page B's report its own clean history.
@@ -2187,7 +2237,7 @@ function installTopFrame(): void {
 
     // Close any in-flight composer — it was started on page A's elements, whose
     // selectors may not resolve on page B, and leaving it open would let the user
-    // submit a note that `persist()` stores under page B's key.
+    // submit a note that is filed under page B's path.
     closeComposer();
 
     render();
@@ -2209,6 +2259,10 @@ function installTopFrame(): void {
     }
     if (message.kind === "get-status") {
       sendResponse({ ok: true, count: annotations.length, active });
+      return true;
+    }
+    if (message.kind === "get-debug-log") {
+      sendResponse({ ok: true, debugLog: buildDebugLog(settings) });
       return true;
     }
     if (message.kind === "settings-changed") {
@@ -2267,8 +2321,29 @@ function installTopFrame(): void {
     { capture: true, passive: true },
   );
 
+  // Ahead of every other listener, so the entry says what the page was about to receive
+  // before this overlay's own handlers decide whether it ever does.
+  for (const type of ["pointerdown", "click"] as const) {
+    listen(
+      window,
+      type,
+      (event) => {
+        debugLog(type, {
+          target: summariseTarget(event.target),
+          ours: isOurUi(event.target as Element),
+          active,
+          mode,
+          composer: !!composer,
+          frozen,
+        });
+      },
+      { capture: true, passive: true },
+    );
+  }
+
   async function refreshSettings(): Promise<void> {
     settings = await loadSettings();
+    setDebugEnabled(settings.debugMode);
     applyAppearance();
     enforceMeasureSetting();
     enforceCssSetting();
@@ -2280,9 +2355,10 @@ function installTopFrame(): void {
     "pointermove",
     (event) => {
       if (!active || composer || marqueeStart) return;
-      // `measure` shares the whole hover path with `point` — it is the same "what is the
-      // pointer over" question, answered with two more things drawn on top.
-      if (mode !== "point" && mode !== "measure") return;
+      // `measure` and `all` share the whole hover path with `point` — it is the same
+      // "what is the pointer over" question. `all` needs it for element highlighting
+      // before the user commits their gesture (click vs drag vs text).
+      if (mode !== "point" && mode !== "measure" && mode !== "all") return;
       // Pointer capture retargets the toolbar drag's moves; it does not stop them
       // propagating, and `root.ts` deliberately lets `pointermove` through the host. So
       // during a fast drag the cursor outruns the pill, lands on page content, and this
@@ -2329,8 +2405,14 @@ function installTopFrame(): void {
       // In text mode a click is how you finish a selection, so let it through.
       if (mode === "text") return;
 
+      // In all mode, skip element-pick when the user just finished a text selection —
+      // the mouseup handler already called beginAnnotation with the text, so doing
+      // element-pick here would open a second composer for the same gesture.
+      if (mode === "all" && window.getSelection()?.toString().trim()) return;
+
       event.preventDefault();
       event.stopPropagation();
+      debugLog("click-swallowed", { target: summariseTarget(event.target), mode });
 
       if (mode === "edit") {
         const picked = document.elementFromPoint(event.clientX, event.clientY);
@@ -2367,7 +2449,8 @@ function installTopFrame(): void {
         return;
       }
 
-      if (mode !== "point") return;
+      // `all` mode shares element-pick/collect logic with `point` mode.
+      if (mode !== "point" && mode !== "all") return;
       const target = document.elementFromPoint(event.clientX, event.clientY);
       if (!target || !eligible(target)) return;
 
@@ -2388,12 +2471,15 @@ function installTopFrame(): void {
   );
 
   // Swallow the mousedown/mouseup pair too, so the page never sees a half-click.
+  // `text` mode is already exempt — the browser must see mousedown to start a selection.
+  // `all` mode gets the same exemption: text selection needs native mousedown/mouseup, and
+  // the click handler already swallows element-picks so pages never see a half-click there.
   for (const type of ["mousedown", "mouseup"] as const) {
     listen(
       document,
       type,
       (event) => {
-        if (!active || composer || mode === "text") return;
+        if (!active || composer || mode === "text" || mode === "all") return;
         if (isOurUi(event.target as Element)) return;
         event.preventDefault();
         event.stopPropagation();
@@ -2405,7 +2491,10 @@ function installTopFrame(): void {
   // --- text selection ----------------------------------------------------------
 
   listen(document, "mouseup", () => {
-    if (!active || composer || mode !== "text") return;
+    // Fire in both explicit text mode and the all mega-mode where text selection is one
+    // of the three recognised gestures. The click handler checks getSelection() to avoid
+    // double-annotating when mode === "all".
+    if (!active || composer || (mode !== "text" && mode !== "all")) return;
 
     // Let the browser settle the selection before reading it.
     window.setTimeout(() => {
@@ -2434,8 +2523,14 @@ function installTopFrame(): void {
 
       // `area` is a drag from the first pixel — the mode says so. In `point` the drag
       // has to earn it, because the same press with the same modifier is also a pick.
+      // In `all` mode any drag becomes a marquee (no modifier required), so set the
+      // pending anchor unconditionally and let `promoteMarquee` decide when it commits.
       if (mode === "area") {
         beginMarquee(anchor);
+        return;
+      }
+      if (mode === "all") {
+        marqueePending = anchor;
         return;
       }
       if (mode === "point" && (event.metaKey || event.ctrlKey)) marqueePending = anchor;
@@ -2583,6 +2678,15 @@ function installTopFrame(): void {
     if (!active) return;
 
     switch (keyboard.key) {
+      case "0":
+        // Return to the mega all-mode from any explicit mode.
+        mode = "all";
+        resetMarquee();
+        clearPicked();
+        overlay.hideAll();
+        measureOverlay.hideAll();
+        render();
+        break;
       case "1":
         mode = "point";
         resetMarquee();

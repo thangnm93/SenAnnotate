@@ -211,6 +211,11 @@ export class SettingsCard {
           "Capture errors & steps",
           "Attaches console errors, failed requests and what you clicked. Field values are never recorded and request bodies never leave the page.",
         ),
+        this.toggle(
+          "debugMode",
+          "Debug log",
+          "Records mode changes, freeze on and off, and which element each click landed on — never text or field values. Save it from the extension popup and send it with a bug report.",
+        ),
 
         this.group("Behaviour"),
         this.toggle(
@@ -226,7 +231,7 @@ export class SettingsCard {
         this.toggle(
           "clearOnCopy",
           "Clear after copying",
-          "Empties the page's annotations once a copy has reached the clipboard, ready for the next round. Off by default — a failed copy never clears.",
+          "Empties this site's annotations, on every page, once a copy has reached the clipboard, ready for the next round. Off by default — a failed copy never clears.",
         ),
         this.hideUntilRestartRow(),
 

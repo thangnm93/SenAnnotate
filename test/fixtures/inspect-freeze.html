@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>SenAnnotate fixture — leaving inspect</title>
+  </head>
+  <body>
+    <main>
+      <h1 id="headline">Leaving inspect</h1>
+      <button id="bump">Bump</button>
+      <output id="clicks">0</output>
+      <output id="ticks">0</output>
+      <output id="later">0</output>
+      <button id="later-btn">Later</button>
+    </main>
+    <script>
+      let ticks = 0;
+      setInterval(() => {
+        document.getElementById("ticks").textContent = String(++ticks);
+      }, 50);
+      let clicks = 0;
+      document.getElementById("bump").addEventListener("click", () => {
+        document.getElementById("clicks").textContent = String(++clicks);
+      });
+      document.getElementById("later-btn").addEventListener("click", () => {
+        setTimeout(() => {
+          document.getElementById("later").textContent = "1";
+        }, 50);
+      });
+    </script>
+  </body>
+</html>

@@ -119,7 +119,7 @@ Fixed in **0.5.1**. Update.
 
 | Cause | Recoverable? |
 |---|---|
-| Different pathname | Yes — notes are keyed on `origin + pathname`. Query strings do **not** split them; paths do. |
+| Different page of the same site | Not lost — the list is per origin, so the note is in the panel on every page, and pinned on the page it was made on. |
 | `http://` vs `https://`, or `localhost` vs `127.0.0.1` | Yes — different origins. Go back to the one you annotated. |
 | **Clear all** / **Clear after copying** | Only from an export. |
 | Uninstalled the extension | Only from an export. |

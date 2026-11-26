@@ -1,6 +1,6 @@
 # The Annotations Panel
 
-The list of what you have found on this page, the filter over it, and the button that
+The list of what you have found on this site, the filter over it, and the button that
 turns it into a report. <kbd>A</kbd>, or the list icon on the toolbar.
 
 ![The annotations panel: capture banner, filter, entries, detail level and Copy report](images/panel-triage.png)
@@ -50,12 +50,12 @@ it, so a list of twenty notes is still navigable.
 | Icon | Does |
 |---|---|
 | ⤓ | Saves the report as a `.md` file instead of copying it. |
-| 🗑 | **Clear all** — deletes every note on this page. |
+| 🗑 | **Clear all** — deletes every note on this site, on every page. |
 | × | Closes the panel. |
 
 **Clear all** also drops the action trail and the diagnostics with it. It is scoped to
-this page; other pages are untouched. To clear everything everywhere, use **Clear all
-pages** in the popup — see [[Sessions Export and Import]].
+this site (origin); other sites are untouched. To clear everything everywhere, use **Clear
+all pages** in the popup — see [[Sessions Export and Import]].
 
 ---
 
@@ -85,9 +85,16 @@ affects the report.
 
 ## Where notes live
 
-Keyed on **`origin + pathname`**. The query string is deliberately excluded, so
-`/orders?page=2` and `/orders?page=3` share one set of notes — pagination is not a
-different screen.
+The list is **per origin**: every page of a site feeds the same list, so moving from
+`/cart` to `/checkout` keeps your notes, and only a clear — **Clear all**, or a copy with
+*Clear after copying* on — empties it. Each note is stored under the page it was made on
+(`origin + pathname`), and the query string is deliberately excluded, so `/orders?page=2`
+and `/orders?page=3` are one screen.
+
+Once the list holds a note from another page, the panel groups notes under their path,
+this page first. Numbers restart on each page and match the pins. A pin appears only on
+the page its note was made on; selecting a note from another page tells you where it is
+rather than opening an editor.
 
 | | |
 |---|---|

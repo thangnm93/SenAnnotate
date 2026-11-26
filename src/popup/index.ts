@@ -34,6 +34,8 @@ const remapCheckbox = $<HTMLInputElement>("import-remap");
 const importButton = $<HTMLButtonElement>("import");
 const importInput = $<HTMLInputElement>("import-file");
 const archiveHint = $("archive-hint");
+const debugButton = $<HTMLButtonElement>("debug-log");
+const debugHint = $("debug-hint");
 /** Preset colour → its button, so the current one can be marked without a re-render. */
 
 let settings: Settings = { ...DEFAULT_SETTINGS };
@@ -322,6 +324,25 @@ importInput.addEventListener("change", async () => {
     await refreshPages();
     await refreshStatus();
   }
+});
+
+debugButton.addEventListener("click", async () => {
+  const response = await askTab({ kind: "get-debug-log" });
+  if (!response?.ok || !response.debugLog) {
+    debugHint.textContent = "Not available on this page.";
+    return;
+  }
+
+  const log = response.debugLog;
+  if (!log.entries.length) {
+    debugHint.textContent = "Nothing recorded yet. Turn on Debug log in the settings and reproduce the problem first.";
+    return;
+  }
+
+  const name = `senannotate-debug-${log.exportedAt.slice(0, 19).replace(/[:T]/g, "-")}.json`;
+  debugHint.textContent = downloadText(JSON.stringify(log, null, 2), "application/json", name)
+    ? `Saved ${log.entries.length} events to ${name}.`
+    : "Could not save the file.";
 });
 
 clearButton.addEventListener("click", async () => {

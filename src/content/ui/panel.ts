@@ -5,6 +5,7 @@
 import { formatSource } from "../../shared/output";
 import {
   OUTPUT_DETAIL_OPTIONS,
+  groupByPage,
   isDone,
   kindOf,
   type Annotation,
@@ -108,7 +109,7 @@ export class Panel {
           "button",
           {
             class: "icon-button",
-            title: "Clear all annotations on this page",
+            title: "Clear all annotations on this site",
             on: { click: () => callbacks.onClearAll() },
           },
           icon("trash", 14),
@@ -157,7 +158,6 @@ export class Panel {
   }
 
   render(annotations: Annotation[], detailLevel: OutputDetailLevel): void {
-    const { callbacks } = this;
     this.annotations = annotations;
     this.detailLevel = detailLevel;
     this.select.value = detailLevel;
@@ -179,10 +179,32 @@ export class Panel {
       return;
     }
 
-    // Numbered against the full list, not the filtered view: note 3 has to stay note 3
-    // in the report whatever the panel is currently showing.
+    // Numbered against the page's full list, not the filtered view: note 3 has to stay
+    // note 3 in the report whatever the panel is currently showing. A heading appears
+    // only once the list holds a page other than this one, so a single-page list looks as it did.
+    const pages = groupByPage(annotations, location.pathname, location.pathname);
+    const shownByPage = groupByPage(shown, location.pathname, location.pathname);
+    const labelled = pages.length > 1 || pages[0].pathname !== location.pathname;
+    for (const group of shownByPage) {
+      if (labelled) {
+        const here = group.pathname === location.pathname;
+        this.list.append(
+          h("div", {
+            class: "panel__page",
+            text: here ? `${group.pathname} · this page` : group.pathname,
+            dataset: { here: String(here) },
+          }),
+        );
+      }
+      const pageList = pages.find((candidate) => candidate.pathname === group.pathname)?.annotations ?? [];
+      this.appendEntries(group.annotations, pageList);
+    }
+  }
+
+  private appendEntries(shown: Annotation[], pageList: Annotation[]): void {
+    const { callbacks } = this;
     for (const annotation of shown) {
-      const number = annotations.indexOf(annotation) + 1;
+      const number = pageList.indexOf(annotation) + 1;
       const source = formatSource(annotation.source);
       const done = isDone(annotation);
 

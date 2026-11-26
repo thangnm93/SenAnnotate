@@ -30,8 +30,17 @@ export type ThemePreference = "auto" | "light" | "dark";
  */
 export type ScreenshotDelivery = "path" | "embed";
 
-/** What a click means while inspect mode is on. */
-export type InspectMode = "point" | "text" | "area" | "measure" | "edit";
+/**
+ * What input gesture inspect mode is currently routing.
+ *
+ * `"all"` is the mega-mode and the default: a short click captures the element, a drag
+ * captures the elements inside the drawn box, and a text selection captures the
+ * highlighted text. The three explicit values lock into one gesture type and exist as
+ * secondary controls for power users who prefer a single interaction surface. `"measure"`
+ * activates the two-click distance/box-model tool (only reachable when `measureTools` is
+ * enabled in settings). `"edit"` opens the live CSS editor on the hovered element.
+ */
+export type InspectMode = "all" | "point" | "text" | "area" | "measure" | "edit";
 
 // -----------------------------------------------------------------------------
 // Triage
@@ -68,6 +77,36 @@ export function kindOf(annotation: Pick<Annotation, "kind">): AnnotationKind {
 
 export function isDone(annotation: Pick<Annotation, "status">): boolean {
   return annotation.status === "done";
+}
+
+/** The page a note belongs to; absent only on a note that has not been through storage yet. */
+export function pathOf(annotation: Pick<Annotation, "pathname">, fallback: string): string {
+  return annotation.pathname ?? fallback;
+}
+
+export interface PageGroup {
+  pathname: string;
+  annotations: Annotation[];
+}
+
+/**
+ * Split one origin's notes by page, in order of first appearance, `first` leading if present.
+ *
+ * Numbers are per page — a pin on `/cart` reads 1, 2, 3 whatever was noted on `/home` —
+ * so the panel, the pins and the report all number a group, never the whole list.
+ */
+export function groupByPage(annotations: Annotation[], fallback: string, first?: string): PageGroup[] {
+  const groups = new Map<string, Annotation[]>();
+  for (const annotation of annotations) {
+    const pathname = pathOf(annotation, fallback);
+    const group = groups.get(pathname);
+    if (group) group.push(annotation);
+    else groups.set(pathname, [annotation]);
+  }
+  const list = [...groups].map(([pathname, items]) => ({ pathname, annotations: items }));
+  const lead = list.findIndex((group) => group.pathname === first);
+  if (lead > 0) list.unshift(...list.splice(lead, 1));
+  return list;
 }
 
 export interface Rect {
@@ -367,6 +406,13 @@ export interface Annotation {
   comment: string;
   timestamp: number;
 
+  /**
+   * The path of the page the note was made on. The list is per origin, so this is what
+   * says where a note lives. Stamped from the storage key on load, which is why a note
+   * written before the list spanned pages still knows its page.
+   */
+  pathname?: string;
+
   /** Absent means `ui` — see `kindOf`. */
   kind?: AnnotationKind;
   /** Absent means `open` — see `isDone`. */
@@ -500,6 +546,8 @@ export interface Settings {
   gridMargin: number;
   /** Freeze animations automatically whenever inspect mode turns on. */
   freezeOnInspect: boolean;
+  /** Keep a bounded in-memory event log the popup can save, for bug reports. */
+  debugMode: boolean;
   /** Include the owner component's props in the report. */
   includeProps: boolean;
   /** Ceiling on how many ancestors to name. */
@@ -561,6 +609,7 @@ export const DEFAULT_SETTINGS: Settings = {
   gridGutter: 24,
   gridMargin: 72,
   freezeOnInspect: false,
+  debugMode: false,
   includeProps: true,
   maxComponents: 6,
   captureDiagnostics: true,
@@ -610,3 +659,24 @@ export const DETAIL_TO_COMPONENT_MODE: Record<OutputDetailLevel, ComponentDetect
   detailed: "smart",
   forensic: "all",
 };
+
+// -----------------------------------------------------------------------------
+// Debug log
+// -----------------------------------------------------------------------------
+
+export interface DebugEntry {
+  /** Milliseconds since the page started, from `performance.now()`. */
+  t: number;
+  kind: string;
+  detail?: Record<string, string | number | boolean | null>;
+}
+
+/** What "Save debug log" writes: the entries plus enough context to read them cold. */
+export interface DebugLog {
+  extensionVersion: string;
+  exportedAt: string;
+  page: string;
+  userAgent: string;
+  settings: Settings;
+  entries: DebugEntry[];
+}

@@ -45,7 +45,7 @@ your codebase.
 
 | Line | Is |
 |---|---|
-| `## Page feedback: /orders` | The page's **pathname**. Not the full URL — the query string is deliberately excluded. |
+| `## Page feedback: /orders` | The page's **pathname**. Not the full URL — the query string is deliberately excluded. When the list holds notes from several pages it reads `## Page feedback: https://host — 3 pages` and each page gets its own `## /path` section, numbered from 1. |
 | `**Stack:**` | The framework found, and libraries beside it. Absent when none was found. |
 | `**Viewport:**` | The window size when the notes were taken. A layout bug is a bug *at a width*. |
 | `### 1. [ui] element` | One heading per note: number, type, element name. The number matches the pin on the page. |

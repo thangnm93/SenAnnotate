@@ -16,6 +16,7 @@ import type { McpBridgeStatus } from "./mcp";
 import type {
   AnnotationStatus,
   ComponentDetectionMode,
+  DebugLog,
   Diagnostics,
   ElementFrameworkInfo,
   PageFrameworkInfo,
@@ -56,6 +57,17 @@ export const ANNOTATION_PREFIX = `${NS}:page:`;
  * layout, not a preference, and syncing it would move the pill on every machine.
  */
 export const DOCK_PREFIX = `${NS}:dock:`;
+/**
+ * Where the annotation composer card was last dragged to, per page.
+ *
+ * A separate prefix from `DOCK_PREFIX` because the two surfaces answer different
+ * questions: the toolbar pill is a persistent workbench tool; the composer is an
+ * ephemeral card opened for one element at a time. Their ideal screen positions can
+ * differ (the pill is corner-anchored by default; the composer opens near its target)
+ * and persisting them independently lets each be forgotten or migrated without
+ * affecting the other.
+ */
+export const COMPOSER_DOCK_PREFIX = `${NS}:composer-dock:`;
 export const SETTINGS_KEY = `${NS}:settings`;
 
 /**
@@ -150,6 +162,8 @@ export type RuntimeMessage =
   | { kind: "settings-changed" }
   /** popup → background, asking for the active tab's annotation count. */
   | { kind: "get-status" }
+  /** popup → content, for the debug log the page has been recording. */
+  | { kind: "get-debug-log" }
   /**
    * background → content, from the right-click menu.
    *
@@ -177,13 +191,14 @@ export type RuntimeMessage =
   /**
    * background → content, after an agent changed notes over the MCP bridge.
    *
-   * The worker has already written storage. This tells an open tab, because a tab holds
-   * its own copy of the page's notes in memory and writes that copy back on the next
-   * edit — without the message, the reviewer's next keystroke would quietly undo the
-   * agent's change. `page` is the storage key without its prefix, `origin + pathname`.
+   * The worker has already written storage. This tells every open tab on that site,
+   * because a tab holds its own copy of the site's notes in memory — all of its pages —
+   * and writes that copy back on the next edit; without the message, the reviewer's next
+   * keystroke would quietly undo the agent's change. `page` is the storage key without
+   * its prefix, `origin + pathname`.
    */
   | { kind: "annotations-updated"; page: string; ids: string[]; status: AnnotationStatus };
 
 export type RuntimeResponse =
-  | { ok: true; dataUrl?: string; count?: number; active?: boolean; mcp?: McpBridgeStatus }
+  | { ok: true; dataUrl?: string; count?: number; active?: boolean; debugLog?: DebugLog; mcp?: McpBridgeStatus }
   | { ok: false; error: string };

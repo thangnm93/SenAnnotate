@@ -98,10 +98,10 @@ once — see [[Sessions Export and Import]].
 
 ## What just happened, in one paragraph
 
-The notes are stored per `origin + pathname` in `chrome.storage.local`, so they survive a
-reload and come back when you return to the same screen. The query string is deliberately
-excluded, so `/orders?page=2` and `/orders?page=3` share one set. Nothing was sent
-anywhere — there is no account and no server.
+The notes are stored in `chrome.storage.local`, one list per origin, so they survive a
+reload and follow you from page to page of the same site; each is pinned on the page it
+was made on. The query string is deliberately excluded, so `/orders?page=2` and
+`/orders?page=3` are one screen. Nothing was sent anywhere — there is no account and no server.
 
 ---
 

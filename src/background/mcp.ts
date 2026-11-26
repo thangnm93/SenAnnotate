@@ -293,11 +293,12 @@ async function runCommand(command: BridgeCommand): Promise<CommandResult> {
 }
 
 /**
- * Write the status into storage, then tell any tab showing that page.
+ * Write the status into storage, then tell every tab on that site.
  *
- * Storage first, because it is the truth and covers the page that is not open. The tab
- * second, because an open tab holds the notes in memory and writes its copy back on the
- * reviewer's next edit — see `annotations-updated` in `shared/protocol.ts`.
+ * Storage first, because it is the truth and covers the page that is not open. The tabs
+ * second, because an open tab holds its site's whole list in memory — every page of the
+ * origin, not only the one it shows — and writes that copy back on the reviewer's next
+ * edit. See `annotations-updated` in `shared/protocol.ts`.
  */
 async function setStatus(page: string, ids: string[], status: AnnotationStatus): Promise<string[]> {
   const key = `${ANNOTATION_PREFIX}${page}`;
@@ -319,7 +320,7 @@ async function setStatus(page: string, ids: string[], status: AnnotationStatus):
   const tabs = await chrome.tabs.query({});
   await Promise.all(
     tabs.map(async (tab) => {
-      if (tab.id === undefined || !tab.url || pageOf(tab.url) !== page) return;
+      if (tab.id === undefined || !tab.url || originOf(tab.url) !== originOf(page)) return;
       try {
         await chrome.tabs.sendMessage(tab.id, message, { frameId: 0 });
       } catch {
@@ -332,10 +333,10 @@ async function setStatus(page: string, ids: string[], status: AnnotationStatus):
   return hit;
 }
 
-function pageOf(url: string): string | null {
+/** `page` is a storage key without its prefix — `origin + pathname` — so it parses as a URL. */
+function originOf(url: string): string | null {
   try {
-    const parsed = new URL(url);
-    return `${parsed.origin}${parsed.pathname}`;
+    return new URL(url).origin;
   } catch {
     return null;
   }

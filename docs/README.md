@@ -222,6 +222,14 @@ button that also cleared was designed and then cut, and the argument is recorded
 rather than lost. Its `changelog.md` records the copy shortcut this feature originally
 carried, and the 0.6.0 binding it collided with.
 
+## [`multi-page-list/`](./multi-page-list/) — unreleased
+
+The annotation list is per origin, so navigating no longer starts an empty one and a review
+can span a whole flow. Its `context.md` is the one to read: the storage layout did not
+change (one key per `origin + pathname`), which is why there is no migration and why the
+popup's export, import and session copy needed no edit; and numbering is per page so pins,
+panel and report agree. `changelog.md` records the test-isolation change this forced.
+
 ## [`share-export/`](./share-export/) — unreleased
 
 A review two people could not previously receive: someone without the extension, and
@@ -259,6 +267,13 @@ the pill can now be dragged anywhere. Its `context.md` is the one to read before
 touching pointer handling again: it sets out why adding a drag did **not** reopen
 `modal-click-leak/` or `modal-focus-leak/`, and which of those guarantees hold by
 design and which hold by accident.
+
+## [`composer-drag/`](./composer-drag/) — unreleased
+
+The annotation card always opened anchored to the clicked element, which on a crowded
+page is often unreadable. It can now be dragged by its header, and the dropped position
+is remembered per page. Its `context.md` is the companion to `draggable-toolbar/`: same
+pointer-capture rules, a separate storage prefix, and why the textarea is not the handle.
 
 ## [`modal-trap-refocus/`](./modal-trap-refocus/) — unreleased
 

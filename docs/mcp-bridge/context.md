@@ -101,10 +101,11 @@ loopback.
 ## Why `set_status` writes storage *and* messages the tab
 
 The worker writes `chrome.storage.local` first: it is the truth, and it covers pages no
-tab is showing. Then it messages every tab on that page, because an open tab holds its own
-copy of the notes in memory and writes that copy back on the reviewer's next edit. Without
-the message, the reviewer's next click silently undid the agent — `test/mcp.mjs` has the
-check, and it fails against a build without the handler.
+tab is showing. Then it messages every tab on that *site* — not only the one showing that
+page — because since `docs/multi-page-list/` an open tab holds its origin's whole list in
+memory and writes that copy back, every page of it, on the reviewer's next edit. Without the
+message, the reviewer's next click silently undid the agent — `test/mcp.mjs` has the check,
+and it fails against a build without the handler.
 
 The tab does **not** `persist()` on that message: storage is already right, and persisting
 would re-run the quota trim and repeat its "stored without N images" toast.

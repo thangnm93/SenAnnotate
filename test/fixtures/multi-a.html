@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>SenAnnotate fixture — multi-page list, page A</title>
+    <style>
+      body { margin: 0; padding: 40px; font: 14px/1.5 system-ui, sans-serif; }
+      button { padding: 8px 14px; border: 1px solid #d0d4da; border-radius: 6px; background: #fff; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <!-- Page A of a pair served from one origin: the multi-page block annotates here, walks
+         to multi-b.html and expects the list to come with it. Its own pair of fixtures, and
+         its own origin in the suite, because the block counts every note on the origin. -->
+    <main>
+      <h1>Page A</h1>
+      <button id="a-one">Page A button</button>
+      <p><a id="to-b" href="/multi-b.html">Go to page B</a></p>
+    </main>
+  </body>
+</html>
