@@ -106,6 +106,26 @@ function startServer() {
 
 // -----------------------------------------------------------------------------
 
+/**
+ * The stack badge's text once detection has filled it in.
+ *
+ * The toolbar paints before the detector answers — detection is a bridge round-trip into
+ * the MAIN world — so reading the badge the moment the toolbar is visible races it. It
+ * usually wins; on a loaded machine it read "" and failed a check that had nothing wrong.
+ * Waits for *some* text, never for the expected text, so a wrong answer still fails.
+ */
+async function settledBadge(page, timeout = 5_000) {
+  const badge = page.locator(".stack-badge");
+  const deadline = Date.now() + timeout;
+  let text = "";
+  while (Date.now() < deadline) {
+    text = ((await badge.textContent()) ?? "").trim();
+    if (text) return text;
+    await page.waitForTimeout(100);
+  }
+  return text;
+}
+
 async function main() {
   await ensureVueFixture();
 
@@ -165,7 +185,7 @@ async function main() {
     check("toolbar is injected", await toolbar.isVisible());
 
     const stackBadge = page.locator(".stack-badge");
-    const stackText = (await stackBadge.textContent())?.trim() ?? "";
+    const stackText = await settledBadge(page);
     check("Vue 3 is detected and versioned", /^Vue 3 \d+\./.test(stackText), `badge read "${stackText}"`);
 
     // Regression: a dev build must not be reported as production. The old check
@@ -440,7 +460,7 @@ async function main() {
     await legacy.goto(at(`vue2-app.html`));
     await legacy.locator(".toolbar").waitFor({ state: "visible", timeout: 10_000 });
 
-    const legacyBadge = (await legacy.locator(".stack-badge").textContent())?.trim() ?? "";
+    const legacyBadge = await settledBadge(legacy);
     check("Vue 2 is detected", legacyBadge.startsWith("Vue 2"), `badge read "${legacyBadge}"`);
 
     await legacy.locator(".tool--brand").click();
@@ -1540,16 +1560,20 @@ async function main() {
     // Typed, not filled: a digit typed here used to reach the mode keys as well as the
     // field, because the retargeted event looked like it came from a plain `DIV`.
     const columns = ruled.locator('.settings input[data-setting="gridColumns"]');
+    // Compared with itself, not with a literal: the default mode's hint changed when
+    // all-mode became the default, and a literal kept asserting the old one.
+    const hintBefore = ((await ruled.locator(".toolbar-hint").textContent()) ?? "").trim();
     await columns.click();
     await columns.fill("");
     await ruled.keyboard.type("6");
     await ruled.keyboard.press("Enter");
     await ruled.waitForTimeout(250);
     check("changing the column count redraws the grid", (await drawn()).bands === 6, JSON.stringify(await drawn()));
+    const hintAfter = ((await ruled.locator(".toolbar-hint").textContent()) ?? "").trim();
     check(
       "and typing it did not switch mode behind the card",
-      ((await ruled.locator(".toolbar-hint").textContent()) ?? "").startsWith("Click an element"),
-      `hint read "${(await ruled.locator(".toolbar-hint").textContent())?.trim() ?? ""}"`,
+      hintBefore !== "" && hintAfter === hintBefore,
+      `hint went from "${hintBefore}" to "${hintAfter}"`,
     );
 
     // The master has to take the rulers with it while their own switch is still on.
