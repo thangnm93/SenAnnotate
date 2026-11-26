@@ -1,4 +1,7 @@
-node_modules/
+# No trailing slash on these two: with one, git ignores only a *directory* of that name,
+# and a symlink called node_modules (a worktree pointing at the main checkout's) slips
+# through — which is how both were once committed, pointing at paths on one machine.
+node_modules
 dist/
 dist-mcp/
 senannotate-mcp-*.mjs
@@ -15,7 +18,7 @@ static/icons/
 test/fixtures/vendor/
 
 # Built by test/build-prod-fixtures.mjs
-test/fixtures/prod/
+test/fixtures/prod
 
 # Written by the test/verify-*.mjs scripts
 test/screenshots/
