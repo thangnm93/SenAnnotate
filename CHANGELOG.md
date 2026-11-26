@@ -10,7 +10,34 @@ matching the tag being released and refuses to publish without one.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.7] — unreleased
+## [0.9.0] — unreleased
+
+[Compare with v0.8.7](https://github.com/thangnm93/SenAnnotate/compare/v0.8.7...v0.9.0)
+
+### Added
+
+- let coding agents read and resolve notes over MCP (off by default) (f93176e)
+- keep one annotation list per site so notes follow you across pages (cbc6e48)
+- all-mode — unified inspect gesture (click, drag, text) (90afe29)
+- drag the annotation composer card, persist position per page (f5cb4da)
+
+### Fixed
+
+- keep a malformed request from stopping the MCP server (4c8268a)
+- release the freeze inspect engaged when inspect ends, and add a saveable debug log (a834317)
+
+### Documentation
+
+- record how the MCP bridge followed main's per-site list (8e823ad)
+- record why the MCP server is not paired with the extension (47248db)
+- describe the per-site annotation list (97615ed)
+
+### Internal
+
+- stop two e2e checks failing on timing and on all-mode's new hint (fb2037c)
+- stop tracking two symlinks that only resolve on one machine (5a82c4a)
+
+## [0.8.7] — 2026-10-02
 
 [Compare with v0.8.6](https://github.com/thangnm93/SenAnnotate/compare/v0.8.6...v0.8.7)
 
