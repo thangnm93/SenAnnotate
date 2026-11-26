@@ -12,7 +12,15 @@
 // `querySelector` and the attribute is removed straight afterwards.
 // =============================================================================
 
-import type { ComponentDetectionMode, DebugLog, Diagnostics, PageFrameworkInfo, ElementFrameworkInfo } from "./types";
+import type { McpBridgeStatus } from "./mcp";
+import type {
+  AnnotationStatus,
+  ComponentDetectionMode,
+  DebugLog,
+  Diagnostics,
+  ElementFrameworkInfo,
+  PageFrameworkInfo,
+} from "./types";
 
 export const NS = "senannotate";
 
@@ -177,8 +185,20 @@ export type RuntimeMessage =
    * top-frame thing, so that case is reported rather than half-handled — see
    * `docs/context-menu/context.md`.
    */
-  | { kind: "annotate-context"; selection: boolean; selectionText?: string; inFrame: boolean };
+  | { kind: "annotate-context"; selection: boolean; selectionText?: string; inFrame: boolean }
+  /** settings card → background: how is the MCP bridge doing? Answered with `mcp`. */
+  | { kind: "mcp-status" }
+  /**
+   * background → content, after an agent changed notes over the MCP bridge.
+   *
+   * The worker has already written storage. This tells every open tab on that site,
+   * because a tab holds its own copy of the site's notes in memory — all of its pages —
+   * and writes that copy back on the next edit; without the message, the reviewer's next
+   * keystroke would quietly undo the agent's change. `page` is the storage key without
+   * its prefix, `origin + pathname`.
+   */
+  | { kind: "annotations-updated"; page: string; ids: string[]; status: AnnotationStatus };
 
 export type RuntimeResponse =
-  | { ok: true; dataUrl?: string; count?: number; active?: boolean; debugLog?: DebugLog }
+  | { ok: true; dataUrl?: string; count?: number; active?: boolean; debugLog?: DebugLog; mcp?: McpBridgeStatus }
   | { ok: false; error: string };

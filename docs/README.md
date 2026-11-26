@@ -383,6 +383,16 @@ needs, `priorInline` is the *inline* value a revert needs, and confusing them lo
 correct on every element that had no inline style.
 
 
+## [`mcp-bridge/`](./mcp-bridge/) — unreleased
+
+An agent that reads the notes itself: `senannotate-mcp`, a dependency-free Node MCP server
+the agent starts, and a bridge in the service worker that dials it on `127.0.0.1` — off by
+default. Four tools, including the screenshot as a real image and `set_status`, which
+ticks the note off in the reviewer's open tab. Its `context.md` is the one to read before
+touching anything that listens on loopback: every page in the browser can reach that port,
+and it lists the rules that keep them out. Its `changelog.md` records an "off by default"
+check that passed against a build where the bridge was on.
+
 ## [`history/vuetation/`](./history/vuetation/) — the predecessor
 
 Where the three-world architecture, the port map from

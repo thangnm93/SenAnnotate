@@ -1,0 +1,17 @@
+{
+  // The MCP server (`src/mcp/`) runs on Node 22, and is checked with Node's globals.
+  //
+  // DOM stays in `lib` for one reason: `shared/output.ts` is imported for its session
+  // report, and the *live* report in the same module reads `window` and `navigator` for
+  // the forensic header. The server never reaches that path — `generateSessionOutput`
+  // reads neither, and esbuild drops `generateOutput` from the bundle — but the module is
+  // checked whole. `test/mcp.mjs` running the real bundle is what guards the runtime.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"]
+  },
+  "include": ["src/mcp"],
+  "exclude": []
+}

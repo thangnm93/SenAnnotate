@@ -22,6 +22,7 @@ Three readers use this wiki, and they want different things.
 |---|---|
 | **Testing a site** and need to report what is wrong | [[Quick Start]] → [[Selecting Elements]] → [[Triage]] |
 | **Using it daily** and want the whole surface | [[Toolbar and Modes]] → [[Settings]] → [[Keyboard Reference]] |
+| **Handing notes to a coding agent** without copy and paste | [[Agent Connection MCP]] |
 | **Changing the code** | [[Architecture]] → [[Development]] → [[Releasing]] |
 
 Not sure it will work on your app? [[Framework Support]] is the honest answer, including
@@ -93,7 +94,7 @@ is the page's own.
 [[Screenshots and Markup]] · [[The Annotations Panel]] · [[Triage]] · [[Settings]] ·
 [[Sessions Export and Import]] · [[Keyboard Reference]]
 
-**What comes out** — [[The Report]] · [[Diagnostics and Privacy]]
+**What comes out** — [[The Report]] · [[Agent Connection MCP]] · [[Diagnostics and Privacy]]
 
 **Environments** — [[Framework Support]] · [[Iframes Modals and Edge Cases]]
 

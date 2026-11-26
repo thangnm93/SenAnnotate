@@ -2030,6 +2030,33 @@ kbd {
   max-width: 200px;
 }
 
+/*
+ * The MCP bridge's status line. Text first, colour second: the words carry the state on
+ * their own, so a reviewer who cannot tell green from orange loses nothing.
+ */
+.mcp-status {
+  color: var(--sa-fg-muted);
+  font-size: 11.5px;
+  text-align: right;
+}
+
+.mcp-status[data-state="connected"] {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.mcp-status[data-state="unreachable"],
+.mcp-status[data-state="refused"] {
+  color: var(--sa-accent-strong);
+}
+
+/* The refused line carries an id to copy into the agent's config: it has to wrap, and it
+   has to be selectable even though the rest of the card is not text to copy. */
+.mcp-status[data-state="refused"] {
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
 .accent-controls {
   display: flex;
   align-items: center;

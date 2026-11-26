@@ -356,6 +356,57 @@ slots on a news page cost nothing. Three limits worth knowing:
 - drag-select (mode <kbd>3</kbd>) stops at the frame boundary. Click and text
   selection work inside frames; the marquee does not.
 
+## Connect your agent (MCP)
+
+Copy and paste needs nothing set up, and stays the default. If your coding agent speaks
+[MCP](https://modelcontextprotocol.io) — Claude Code, Cursor, Codex, most of them do — it
+can read the notes itself instead: live, with the screenshots as real images, and mark
+each one done as it fixes it, which ticks it off in your open tab.
+
+1. **Get the server.** One file, no dependencies, Node 22 or later:
+   `dist-mcp/senannotate-mcp.mjs` after `npm run build`, or `senannotate-mcp-<version>.mjs`
+   from a [release](https://github.com/thangnm93/SenAnnotate/releases).
+2. **Add it to your agent.** Claude Code:
+
+   ```bash
+   claude mcp add senannotate -- node /absolute/path/to/senannotate-mcp.mjs
+   ```
+
+   Anything that takes a JSON config (Cursor, Claude Desktop, …):
+
+   ```json
+   { "mcpServers": { "senannotate": { "command": "node", "args": ["/absolute/path/to/senannotate-mcp.mjs"] } } }
+   ```
+
+3. **Switch it on in Chrome:** toolbar → gear → *AI agent* → **Connect to your agent
+   (MCP)**. The status line underneath says *Connected* once it has found the server.
+
+| Tool | What the agent gets |
+|---|---|
+| `list_annotations` | The open notes — id, kind, note, element, source file — for every page, or one (`url`). |
+| `get_report` | The same Markdown *Copy report* produces, at any detail level, with an id per note. |
+| `get_annotation` | One note in full, plus its screenshot and reference images as images. |
+| `set_status` | Mark notes `done` (or `open` again). Your tab updates; nothing is ever deleted. |
+
+Worth knowing:
+
+- **Off by default, and local only.** The extension connects to `127.0.0.1` and nowhere
+  else — the port is the one thing you can change (`SENANNOTATE_MCP_PORT` on the server,
+  the *Port* row in the extension). The server refuses any connection from a web page,
+  so a site you visit cannot read your notes through it.
+- **Only the Web Store build is trusted by default.** Running an unpacked copy (from a
+  release zip or from source)? Its id differs, and the *Status* row says *Refused* and
+  shows it. Add it to the server's environment — Claude Code:
+  `claude mcp add senannotate -e SENANNOTATE_EXTENSION_ID=<id> -- node …/senannotate-mcp.mjs`,
+  or `"env": { "SENANNOTATE_EXTENSION_ID": "<id>" }` in a JSON config.
+- **Several agents at once work.** The first server to start owns the port and the
+  others relay through it; when its agent exits, another takes over.
+- **Chrome 116 or later** keeps the connection open in the background. On 111–115 it
+  drops when the browser goes idle and comes back on the next page load.
+- **No console errors or failed requests.** Those live in the page's memory and are
+  never stored, so — like *Copy session* — the agent gets the notes without them. Copy a
+  single page's report from its toolbar when you need them.
+
 ## What the report looks like
 
 ```markdown
@@ -459,7 +510,13 @@ three contexts:
                │  chrome.runtime
 ┌──────────────┴───────────────────────────┐
 │  service worker · src/background         │
-│  captureVisibleTab, toolbar badge        │
+│  captureVisibleTab, toolbar badge,       │
+│  MCP bridge (off unless switched on)     │
+└──────────────┬───────────────────────────┘
+               │  WebSocket, 127.0.0.1 only
+┌──────────────┴───────────────────────────┐
+│  senannotate-mcp · src/mcp (Node)        │  started by the agent, over stdio
+│  hub/relay, the four MCP tools           │
 └──────────────────────────────────────────┘
 ```
 
@@ -699,11 +756,13 @@ src/
 ├── inspector/    MAIN world — freeze, diagnostics
 │   └── detectors/  one file per framework + a dispatcher
 ├── content/      ISOLATED world — capture, storage, UI, frame bridge
-├── background/   service worker
-└── popup/        status, session report, export/import
+├── background/   service worker — capture, badge, the MCP bridge
+├── popup/        status, session report, export/import
+└── mcp/          senannotate-mcp, the Node MCP server (built to dist-mcp/, not the zip)
 ```
 
-Zero runtime dependencies. Build-time: `esbuild` and `typescript`.
+Zero runtime dependencies — the MCP server included. Build-time: `esbuild`,
+`typescript`, and Node's type definitions.
 
 ## Docs
 

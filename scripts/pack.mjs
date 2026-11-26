@@ -3,7 +3,8 @@
 // =============================================================================
 //
 // Produces `senannotate-<version>.zip` containing the unpacked extension plus the
-// tester guide, ready to hand over for `chrome://extensions` → Load unpacked.
+// tester guide, ready to hand over for `chrome://extensions` → Load unpacked — and,
+// beside it, `senannotate-mcp-<version>.mjs`, the agent's MCP server.
 //
 // Uses the system `zip`, which is present on macOS and Linux — not worth a
 // dependency for one command.
@@ -40,5 +41,17 @@ copyFileSync(join(ROOT, "TESTER-GUIDE.md"), join(payload, "TESTER-GUIDE.md"));
 execFileSync("zip", ["-qr", archive, name], { cwd: STAGING });
 rmSync(STAGING, { recursive: true, force: true });
 
+// The MCP server ships beside the zip, never inside it: the zip is what the Web Store
+// receives, and a Node program in an extension package is code the extension never runs
+// and a reviewer has to ask about. One file, so a release asset rather than a second zip.
+const mcpSource = join(ROOT, "dist-mcp", "senannotate-mcp.mjs");
+const mcpTarget = join(ROOT, `senannotate-mcp-${version}.mjs`);
+if (!existsSync(mcpSource)) {
+  console.error("dist-mcp/senannotate-mcp.mjs is missing — run `npm run build` first.");
+  process.exit(1);
+}
+copyFileSync(mcpSource, mcpTarget);
+
 console.log(`\npacked → ${archive}`);
+console.log(`         ${mcpTarget}`);
 console.log("Send this to testers along with TESTER-GUIDE.md's install steps.\n");

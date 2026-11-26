@@ -26,17 +26,16 @@ SenAnnotate has one purpose: to describe a web page element precisely enough tha
 else can act on a note about it.
 
 The user points at an element — by turning on inspect mode and clicking it, or by
-right-clicking it and choosing the extension's entry in the context menu — and types a note.
-The extension then
-produces a Markdown report that names that element — its DOM path, a re-resolvable CSS
-selector, and, on pages built with Vue, React, Svelte or Angular, the component and the
-source file the framework itself reports — so the note can be handed to an AI coding
-assistant or a colleague without anyone guessing which element was meant.
+right-clicking it and choosing the extension's context-menu entry — and types a note. The
+extension then produces a Markdown report that names that element — its DOM path, a
+re-resolvable CSS selector, and, on pages built with Vue, React, Svelte or Angular, the
+component and source file the framework reports — so the note can be handed to an AI coding
+assistant or a colleague without guessing which element was meant.
 
 That is its only function. It does not modify, block or inject anything into the pages it
-inspects beyond its own floating toolbar, and it has no server: everything it produces stays
-on the user's device until the user copies the report, saves a screenshot, or saves the notes
-as a file.
+inspects beyond its own floating toolbar, and it has no server: what it produces stays on the
+user's device until the user copies or saves it — or, with an off-by-default setting, hands
+it to their coding assistant on the same machine (127.0.0.1).
 ```
 
 ---
@@ -56,7 +55,8 @@ let a write fail and lose the notes. (2)
 chrome.storage.sync holds preferences only: report detail level, theme, whether diagnostics
 capture is enabled, and whether the toolbar is collapsed, so they follow the user's Chrome
 profile between machines. Annotation content is never written to sync storage. Nothing in
-either store is transmitted anywhere — the extension makes no network requests of its own.
+either store leaves the device, except to the user's own machine (127.0.0.1) when the user
+turns on the off-by-default agent (MCP) setting.
 ```
 
 ### activeTab
@@ -117,8 +117,8 @@ are never recorded and credential-like query parameters are redacted. A right-cl
 which element the pointer was over so the context-menu entry can act on it; that note is
 replaced by the next right-click. The page's DOM is read in detail only when the user
 annotates an element — by clicking it with inspect mode on, or by choosing the context-menu
-entry. The extension makes no network request of its own; notes go to the user's own disk
-only when the user saves them as a file.
+entry. The extension makes no network request of its own; notes leave only as a file the
+user saves, or, with the off-by-default agent setting on, to the user's own machine (127.0.0.1).
 ```
 
 ---
@@ -133,6 +133,11 @@ review the banner warns about. Verified: all four bundles (`content.js`, `inspec
 occurrences of `eval(` or `new Function`. There are no `<script>` tags injected, no dynamic
 `import()`, no remote stylesheet or module URLs, and no `chrome.scripting` calls. The
 extension has no runtime dependencies at all.
+
+The optional agent connection does not change this answer: the service worker exchanges
+JSON *data* with a local program over a WebSocket and never executes anything it receives.
+The only message it acts on sets a note's status to `open` or `done`. The local program is
+not part of the extension package (`dist-mcp/` is built separately and never zipped).
 
 ---
 
@@ -153,7 +158,9 @@ extension has no runtime dependencies at all.
 ### The three certifications — all true, tick all three
 
 - **Do not sell or transfer user data to third parties** — true. The extension makes no
-  network requests of its own; there is no endpoint for data to go to.
+  network requests of its own; there is no endpoint for data to go to. The optional agent
+  connection is to a program on the user's own machine (127.0.0.1), started by the user's
+  own tools — not a third party.
 - **Do not use user data for purposes unrelated to the single purpose** — true. Everything
   captured exists to build the report the user asked for.
 - **Do not use user data to determine creditworthiness or for lending** — true.

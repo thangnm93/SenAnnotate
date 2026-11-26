@@ -16,5 +16,8 @@
     "resolveJsonModule": true,
     "noEmit": true
   },
-  "include": ["src", "build.mjs", "scripts"]
+  "include": ["src", "build.mjs", "scripts"],
+  // The MCP server runs on Node, not in Chrome: it has Node's globals and no DOM, so it
+  // is checked by `tsconfig.mcp.json` instead.
+  "exclude": ["src/mcp"]
 }

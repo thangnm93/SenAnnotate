@@ -17,6 +17,7 @@ import {
   pathOf,
   type Annotation,
   type AnnotationKind,
+  type AnnotationStatus,
   type Diagnostics,
   type InspectMode,
   type Measurements,
@@ -274,6 +275,8 @@ let markers!: Markers;
 let toolbar!: Toolbar;
 let panel: Panel | null = null;
 let settingsCard: SettingsCard | null = null;
+/** Polls the worker for the MCP bridge's status while the settings card is open. */
+let mcpStatusTimer: ReturnType<typeof setInterval> | null = null;
 let measureOverlay!: MeasureOverlay;
 let cssCard: CssCard | null = null;
 let editTarget: Element | null = null;
@@ -765,12 +768,66 @@ function toggleSettings(force?: boolean): void {
     // After `render`, not before: the flip to underneath the pill turns on the card's own
     // height, and a card whose rows have not been filled in yet measures short.
     settingsCard.anchorTo(toolbar.dockBox());
+    watchMcpStatus(true);
   } else {
+    watchMcpStatus(false);
     settingsCard?.destroy();
     settingsCard = null;
   }
 
   render();
+}
+
+/**
+ * Keep the settings card's MCP status line current while the card is open.
+ *
+ * Polled rather than pushed: the worker would otherwise need to know which tabs have the
+ * card open, and the line is only on screen for as long as someone is looking at it. The
+ * poll costs nothing with the card closed, because it does not run.
+ */
+function watchMcpStatus(on: boolean): void {
+  if (mcpStatusTimer) clearInterval(mcpStatusTimer);
+  mcpStatusTimer = null;
+  if (!on) return;
+
+  const refresh = async () => {
+    const response = await sendRuntime({ kind: "mcp-status" });
+    settingsCard?.setMcpStatus(response?.ok ? response.mcp ?? null : null);
+  };
+  void refresh();
+  mcpStatusTimer = setInterval(() => void refresh(), 1_500);
+}
+
+/**
+ * An agent changed notes on this site over the MCP bridge.
+ *
+ * `page` is any page of the origin, not necessarily this one: the list in memory is the
+ * whole site's (`docs/multi-page-list/`), so a note marked done on `/checkout` is ours
+ * to update while the reviewer is on `/cart`.
+ *
+ * Storage already holds the change — the worker wrote it. This brings the copy in memory
+ * into line so the panel, the pins and the count show it, and so the reviewer's next edit
+ * does not write the old status back over it. Deliberately not `persist()`: storage is
+ * already right, and persisting would re-run the quota trim and repeat its toast.
+ */
+function applyAgentUpdate(page: string, ids: string[], status: AnnotationStatus): void {
+  if (!page.startsWith(`${location.origin}/`)) return;
+
+  const wanted = new Set(ids);
+  let changed = 0;
+  for (const annotation of annotations) {
+    if (!wanted.has(annotation.id) || (isDone(annotation) ? "done" : "open") === status) continue;
+    annotation.status = status;
+    changed += 1;
+  }
+  if (!changed) return;
+
+  render();
+  ui.toast(
+    status === "done"
+      ? `Your agent marked ${changed} note${changed === 1 ? "" : "s"} done`
+      : `Your agent reopened ${changed} note${changed === 1 ? "" : "s"}`,
+  );
 }
 
 function togglePanel(force?: boolean): void {
@@ -2215,6 +2272,11 @@ function installTopFrame(): void {
     }
     if (message.kind === "annotate-context") {
       void annotateRightClicked(message);
+      sendResponse({ ok: true });
+      return true;
+    }
+    if (message.kind === "annotations-updated") {
+      applyAgentUpdate(message.page, message.ids, message.status);
       sendResponse({ ok: true });
       return true;
     }
