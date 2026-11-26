@@ -88,6 +88,22 @@ its own; `test/mcp.mjs` sends `null`, `[1]` and `7` down each and asserts the se
 answers. The same review raised port squatting — `context.md`, *What it does not defend
 against*.
 
+**`main` moved under it: one list per site.** By merge time `docs/multi-page-list/` had
+landed — storage still has one key per `origin + pathname`, but a tab now loads every key of
+its origin as one list. Two things in the bridge assumed one page per tab and broke without
+a conflict marker: `applyAgentUpdate` compared against `pageKey()`, which no longer exists,
+and the worker messaged only tabs whose *path* matched the note's. A tab on `/cart` holds
+the notes of `/checkout` too, and would have written the stale copy back. Both now match on
+the origin. The only textual conflict was `RuntimeResponse` and its import, where `main`
+had added `debugLog` beside our `mcp`.
+
+The merge also brought in two symlinks committed by mistake with `docs/inspect-all/` —
+`node_modules` and `test/fixtures/prod`, pointing at paths on one machine. Because both
+directories are ignored, git was free to replace the real ones with the dangling links:
+the checkout lost its `node_modules` and its built production fixtures mid-merge. Untracked
+in their own commit, and the two ignore patterns lost their trailing slash, which is what
+had let a *symlink* of either name through.
+
 **Two more builds were broken on purpose** to make sure the end-to-end checks can fail:
 
 | Broken build | Checks that failed |
@@ -108,6 +124,13 @@ Run headless (`SENANNOTATE_HEADLESS=1`), Chromium 148 via Playwright 1.60:
   upgrade 9/9; MCP 59/59.
 - After the malformed-JSON fix: `test/mcp.mjs` 63/63 (`src/content/` untouched since the
   full run).
+- After merging `main` (per-site list, inspect-all, composer drag, freeze debug): the whole
+  suite — measure all passed; e2e 439/439; upgrade 12/12; MCP 63/63. Getting there took
+  three runs. The first two each failed one e2e check, a different one each time, neither
+  touching the bridge: a hint assertion left behind when all-mode became the default
+  (fails on `main` alone too — 438/439 there), and two stack-badge reads that raced
+  detection. Both fixed in a `test:` commit; a one-off click timeout in the second run
+  did not recur.
 
 Not verified here: the worker staying alive on an idle Chrome 116+ with no debugger
 attached (see `context.md` — Playwright's CDP attachment keeps every worker alive), and
