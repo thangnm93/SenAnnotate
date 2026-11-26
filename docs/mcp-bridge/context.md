@@ -68,9 +68,13 @@ The extension authenticates nothing about the server. Whatever is listening on
 Closing it needs a secret the extension and the server share: the server prints a pairing
 key once, the reviewer pastes it into the settings card, and the server proves it holds it
 (an HMAC over a nonce in `welcome`) before the worker sends a byte of notes or obeys a
-command. Not built: it puts a copy-and-paste step in front of every user to defend a
-shared-machine case, and that trade is the product owner's call, not the implementer's.
-Raised by an automated review of the first commit; recorded in `PRIVACY.md` meanwhile.
+command. Raised by an automated review of the first commit.
+
+**Decided against, 26 November 2026, by the project owner:** it puts a copy-and-paste step
+in front of every user to defend a shared-machine case, and development machines are
+overwhelmingly single-user. `PRIVACY.md` discloses the residual and says to leave the switch
+off on a shared computer. Revisit only if the bridge is offered somewhere shared machines
+are the norm.
 
 ## Lifetime of the worker
 
